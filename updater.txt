@@ -1,0 +1,20 @@
+"Updater"
+{
+	"Information"
+	{
+		"Version"
+		{
+			"Latest"	"1.7.0"
+		}
+		
+		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.7.0:"
+		"Notes"	"Added Updater support"
+		"Notes"	"Minor code changes for Updater support"
+	}
+	
+	"Files"
+	{
+		"Plugin"	"Path_SM/plugins/advanced_armor.smx"
+		"Source"	"Path_SM/scripting/advanced_armor.sp"
+	}
+}
