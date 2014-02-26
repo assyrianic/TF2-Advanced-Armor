@@ -4,10 +4,12 @@
 #include <tf2_stocks>
 #include <tf2items>
 #include <clientprefs>
+#undef REQUIRE_PLUGIN
 #include <updater>
 
-#define PLUGIN_VERSION "1.6"
-#define UPDATE_URL "https://assyrian@bitbucket.org/assyrian/tf2-advanced-armor-plugin/advanced_armor.txt"
+#define PLUGIN_VERSION "1.7"
+#define UPDATE_URL "https://bitbucket.org/assyrian/tf2-advanced-armor-plugin/raw/default/updater.txt"
+#define DEBUG
 
 new armor[MAXPLAYERS+1];
 new MaxArmor[MAXPLAYERS+1];
