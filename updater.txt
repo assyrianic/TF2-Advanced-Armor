@@ -4,12 +4,15 @@
 	{
 		"Version"
 		{
-			"Latest"	"1.7.0"
+			"Latest"	"1.7.2"
 		}
 		
-		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.7.0:"
-		"Notes"	"Added Updater support"
-		"Notes"	"Minor code changes for Updater support"
+		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.7.2:"
+		"Notes"	"Fixed a minor glitch with damage calculation on Armor"
+		"Notes"	"Added sm_armorhudparams to allow players to change the placement of the hud"
+		"Notes"	"Will add cookie support for sm_armorhudparams later"
+		"Notes" "Fixed up Engineer Wrench-Armor fixing code a bit"
+		"Notes" "added cvar that allows ubered+bonked players to lose armor if they are damage while invulnerable, default off"
 	}
 	
 	"Files"
