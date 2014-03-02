@@ -6,14 +6,16 @@
 #include <clientprefs>
 #undef REQUIRE_PLUGIN
 #include <updater>
+#include <morecolors>
 
-#define PLUGIN_VERSION "1.7"
+#define PLUGIN_VERSION "1.7.3"
 #define UPDATE_URL "https://bitbucket.org/assyrian/tf2-advanced-armor-plugin/raw/default/updater.txt"
 
 new armor[MAXPLAYERS+1];
 new MaxArmor[MAXPLAYERS+1];
 new ArmorType[MAXPLAYERS+1];
 new Float:ArmorHUDParams[MAXPLAYERS+1][2];
+new ArmorHUDColor[MAXPLAYERS+1][3];
 new ArmorRegenerate[MAXPLAYERS+1];
 new Float:DamageResistance[MAXPLAYERS+1];
 new bool:ArmorOverheal[MAXPLAYERS+1] = false;
@@ -25,12 +27,14 @@ new Handle:armor_ammo_allow = INVALID_HANDLE;
 new Handle:armor_from_engie = INVALID_HANDLE;
 new Handle:allow_self_hurt = INVALID_HANDLE;
 new Handle:allow_uber_damage = INVALID_HANDLE;
+new Handle:allow_crit_pierce = INVALID_HANDLE;
 new Handle:armorregen = INVALID_HANDLE;
 new Handle:show_hud_armor = INVALID_HANDLE;
 
 new Handle:armor_from_spencer = INVALID_HANDLE;
 new Handle:spencer_time = INVALID_HANDLE;
 new Handle:allow_hud_change = INVALID_HANDLE;
+new Handle:allow_hud_color = INVALID_HANDLE;
 
 new Handle:maxarmor_scout = INVALID_HANDLE;
 new Handle:maxarmor_soldier = INVALID_HANDLE;
@@ -87,9 +91,18 @@ new Handle:cvBlu = INVALID_HANDLE;
 new Handle:cvRed = INVALID_HANDLE;
 
 new Handle:HUDCookie;
-//new Handle:HUDParamsCookie;
+new Handle:HUDParamsCookieX;
+new Handle:HUDParamsCookieY;
+
+new Handle:RedCookie;
+new Handle:GreenCookie;
+new Handle:BlueCookie;
+
+new Handle:timer_bitch_convar = INVALID_HANDLE;
 
 new bool:g_bAutoUpdate;
+
+new bool:canCrit[MAXPLAYERS+1];
 
 //new Handle:g_hSdkEquipWearable; // handles viewmodels and world models; props to Friagram
 //new bool:g_bEwSdkStarted;
@@ -125,9 +138,15 @@ public OnPluginStart()
 	RegAdminCmd("sm_setarmor", Command_SetPlayerArmor, ADMFLAG_KICK);
 	RegConsoleCmd("sm_armorhud", Command_SetPlayerHUD, "Let's a player set his/her Armor hud style");
 	RegConsoleCmd("sm_armorhudparams", Command_SetHudParams, "Let's a player set his/her Armor hud params");
+	RegConsoleCmd("sm_armorhelp", ArmorHelp, "help menu for players");
+	RegConsoleCmd("sm_armorhudcolor", Command_SetHudColor, "let's players change their armor hud color");
 
 	HUDCookie = RegClientCookie("adarmor_hudstyle", "player's selected hud style", CookieAccess_Public);
-	//HUDParamsCookie = RegClientCookie("adarmor_hudparams", "player's selected hud params", CookieAccess_Public);
+	HUDParamsCookieX = RegClientCookie("adarmor_hudparamsx", "player's selected hud params x coordinate", CookieAccess_Public);
+	HUDParamsCookieY = RegClientCookie("adarmor_hudparamsy", "player's selected hud params y coordinate", CookieAccess_Public);
+	RedCookie = RegClientCookie("adarmor_hudred", "player's selected hud params red", CookieAccess_Public);
+	GreenCookie = RegClientCookie("adarmor_hudgreen", "player's selected hud params green", CookieAccess_Public);
+	BlueCookie = RegClientCookie("adarmor_hudblue", "player's selected hud params blue", CookieAccess_Public);
 
 	plugin_enable = CreateConVar("sm_adarmor_enabled", "1", "Enable Advanced Armor plugin", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 
@@ -139,8 +158,12 @@ public OnPluginStart()
 	allow_self_hurt = CreateConVar("sm_adarmor_allow_self_hurt", "1", "Let's players destroy their own armor by damaging themselves", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 
 	allow_uber_damage = CreateConVar("sm_adarmor_allow_uber_dmg", "0", "allows players to destroy ubered or bonked player's armor while invulnerable", FCVAR_PLUGIN, true, 0.0, true, 1.0);
+	
+	allow_crit_pierce = CreateConVar("sm_adarmor_allow_crit_dmg", "0", "allows crit damage to ignore armor", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 
 	allow_hud_change = CreateConVar("sm_adarmor_allow_hud_change", "1", "Let's players change their HUD parameters with sm_armorhudparams", FCVAR_PLUGIN, true, 0.0, true, 1.0);
+
+	allow_hud_color = CreateConVar("sm_adarmor_allow_hud_color", "1", "Let's players change their HUD color with sm_armorhudcolor", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 
 	armorspawn = CreateConVar("sm_adarmor_armoronspawn", "1", "Enable players to spawn with armor, 1 = full armor, 2 = half, 0 = none", FCVAR_PLUGIN|FCVAR_NOTIFY);
 
@@ -209,6 +232,8 @@ public OnPluginStart()
 	armortype_sniper = CreateConVar("sm_adarmor_armortype_sniper", "1", "what armor type sniper should get, 1 = light armor, 2 = medium, 3 = heavy", FCVAR_PLUGIN|FCVAR_NOTIFY);
 	armortype_spy = CreateConVar("sm_adarmor_armortype_spy", "2", "what armor type spy should get, 1 = light armor, 2 = medium, 3 = heavy", FCVAR_PLUGIN|FCVAR_NOTIFY);
 
+	timer_bitch_convar = CreateConVar("sm_adarmor_advert_bitch", "60.0", "how many times the advert will bitch at players per second", FCVAR_PLUGIN|FCVAR_NOTIFY);
+
 	//g_bEwSdkStarted = TF2_EwSdkStartup();
 
 	HookEvent("player_death", Event_PlayerDeath, EventHookMode_Pre);
@@ -228,25 +253,43 @@ public OnPluginStart()
 		}
 	}
 }
+public OnConfigsExecuted()
+{
+	CreateTimer(GetConVarFloat(timer_bitch_convar), Timer_Announce, _, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+}
 public OnClientDisconnect(client)
 {
 	MaxArmor[client] = 0;
 	ArmorType[client] = 0;
-	//hud_style[client] = 0;
 	ClearTimer(clienttimer[client]);
 	ClearTimer(clientarmorregen[client]);
 	ClearTimer(lazycoding[client]);
 }
 public OnClientPutInServer(client)
 {
-	if (GetConVarBool(plugin_enable))
+	if (IsValidClient(client))
 	{
 		SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
 		SDKHook(client, SDKHook_TraceAttack, TraceAttack);
-		armor[client] = 0;
-		ArmorHUDParams[client][0] = -0.75;
-		ArmorHUDParams[client][1] = 0.75;
-		//hud_style[client] = 1;
+		if (clienttimer[client] == INVALID_HANDLE)
+			clienttimer[client] = CreateTimer(0.2, DrawHud, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+
+		if (clientarmorregen[client] == INVALID_HANDLE)
+			clientarmorregen[client] = CreateTimer(1.0, ArmorRegen, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+
+		if (lazycoding[client] == INVALID_HANDLE)
+			lazycoding[client] = CreateTimer(GetConVarFloat(spencer_time), DispenserCheck, client, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
+
+		if (GetConVarBool(plugin_enable))
+		{
+			if (GetHUDColorR(client) <= 0 && GetHUDColorG(client) <= 0 && GetHUDColorB(client) <= 0)
+			{
+				SetHUDColorR(client, 255);
+				SetHUDColorG(client, 30);
+				SetHUDColorB(client, 90);
+			}
+			armor[client] = 0;
+		}
 	}
 }
 GetHUDSetting(client)
@@ -267,47 +310,108 @@ SetHUDSetting(client, option)
 	IntToString(option, hudpick, sizeof(hudpick));
 	SetClientCookie(client, HUDCookie, hudpick);
 }
-/*GetHUDParams(client)
+Float:GetHUDXParams(client)
 {
-	if (!IsValidClient(client)) return 0;
-	if (IsFakeClient(client)) return 0;
-	if (!AreClientCookiesCached(client)) return 0;
+	if (!IsValidClient(client)) return 0.0;
+	if (IsFakeClient(client)) return 0.0;
+	if (!AreClientCookiesCached(client)) return 0.0;
 	decl String:hudparamsx[32];
-	decl String:hudparamsy[32];
-	new Float:[
-	GetClientCookie(client, HUDParamsCookie, hudparamsx, sizeof(hudparamsx));
-	GetClientCookie(client, HUDParamsCookie, hudparamsy, sizeof(hudparamsy));
-	return StringToFloat(hudpick);
+	decl Float:hudx;
+	GetClientCookie(client, HUDParamsCookieX, hudparamsx, sizeof(hudparamsx));
+	StringToFloatEx(hudparamsx, hudx);
+	return hudx;
 }
-SetHUDSetting(client, Float:x, Float:y)
+Float:GetHUDYParams(client)
+{
+	if (!IsValidClient(client)) return 0.0;
+	if (IsFakeClient(client)) return 0.0;
+	if (!AreClientCookiesCached(client)) return 0.0;
+	decl String:hudparamsy[32];
+	decl Float:hudy;
+	GetClientCookie(client, HUDParamsCookieY, hudparamsy, sizeof(hudparamsy));
+	StringToFloatEx(hudparamsy, hudy);
+	return hudy;
+}
+SetHUDXParams(client, Float:x)
 {
 	if (!IsValidClient(client)) return;
 	if (IsFakeClient(client)) return;
 	if (!AreClientCookiesCached(client)) return;
 	decl String:stringx[32];
-	decl String:stringy[32];
 	FloatToString(x, stringx, sizeof(stringx));
+	SetClientCookie(client, HUDParamsCookieX, stringx);
+}
+SetHUDYParams(client, Float:y)
+{
+	if (!IsValidClient(client)) return;
+	if (IsFakeClient(client)) return;
+	if (!AreClientCookiesCached(client)) return;
+	decl String:stringy[32];
 	FloatToString(y, stringy, sizeof(stringy));
-	SetClientCookie(client, HUDParamsCookie, stringx);
-	SetClientCookie(client, HUDParamsCookie, stringy);
-}*/
+	SetClientCookie(client, HUDParamsCookieY, stringy);
+}
+GetHUDColorR(client)
+{
+	if (!IsValidClient(client)) return 0;
+	if (IsFakeClient(client)) return 0;
+	if (!AreClientCookiesCached(client)) return 0;
+	decl String:getred[32];
+	GetClientCookie(client, RedCookie, getred, sizeof(getred));
+	return StringToInt(getred);
+}
+GetHUDColorG(client)
+{
+	if (!IsValidClient(client)) return 0;
+	if (IsFakeClient(client)) return 0;
+	if (!AreClientCookiesCached(client)) return 0;
+	decl String:getgreen[32];
+	GetClientCookie(client, GreenCookie, getgreen, sizeof(getgreen));
+	return StringToInt(getgreen);
+}
+GetHUDColorB(client)
+{
+	if (!IsValidClient(client)) return 0;
+	if (IsFakeClient(client)) return 0;
+	if (!AreClientCookiesCached(client)) return 0;
+	decl String:getblu[32];
+	GetClientCookie(client, BlueCookie, getblu, sizeof(getblu));
+	return StringToInt(getblu);
+}
+SetHUDColorR(client, r)
+{
+	if (!IsValidClient(client)) return;
+	if (IsFakeClient(client)) return;
+	if (!AreClientCookiesCached(client)) return;
+	decl String:redhue[32];
+	IntToString(r, redhue, sizeof(redhue));
+	SetClientCookie(client, RedCookie, redhue);
+}
+SetHUDColorG(client, g)
+{
+	if (!IsValidClient(client)) return;
+	if (IsFakeClient(client)) return;
+	if (!AreClientCookiesCached(client)) return;
+	decl String:greenhue[32];
+	IntToString(g, greenhue, sizeof(greenhue));
+	SetClientCookie(client, GreenCookie, greenhue);
+}
+SetHUDColorB(client, b)
+{
+	if (!IsValidClient(client)) return;
+	if (IsFakeClient(client)) return;
+	if (!AreClientCookiesCached(client)) return;
+	decl String:bluhue[32];
+	IntToString(b, bluhue, sizeof(bluhue));
+	SetClientCookie(client, BlueCookie, bluhue);
+}
 public Action:event_player_spawn(Handle:event, const String:name[], bool:dontBroadcast)
 {
 	new client = GetClientOfUserId(GetEventInt(event, "userid"));
+	if (!IsValidClient(client, false))
+		return Plugin_Continue;
+
 	if (GetConVarBool(plugin_enable))
 	{
-		if (!IsValidClient(client, false))
-			return Plugin_Continue;
-
-		if (clienttimer[client] == INVALID_HANDLE)
-			clienttimer[client] = CreateTimer(0.2, DrawHud, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
-
-		if (clientarmorregen[client] == INVALID_HANDLE)
-			clientarmorregen[client] = CreateTimer(1.0, ArmorRegen, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
-
-		if (lazycoding[client] == INVALID_HANDLE)
-			lazycoding[client] = CreateTimer(GetConVarFloat(spencer_time), DispenserCheck, client, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
-
 		if (!GetConVarBool(cvBlu) && GetClientTeam(client) == 3)
 			return Plugin_Continue;
 
@@ -329,9 +433,9 @@ public Action:event_player_spawn(Handle:event, const String:name[], bool:dontBro
 }
 public Action:event_changeclass(Handle:event, const String:name[], bool:dontBroadcast)
 {
+	new client = GetClientOfUserId(GetEventInt(event, "userid"));
 	if (GetConVarBool(plugin_enable))
 	{
-		new client = GetClientOfUserId(GetEventInt(event, "userid"));
 		armor[client] = 0;
 		ArmorOverheal[client] = false;
 	}
@@ -366,23 +470,29 @@ public Action:DrawHud(Handle:timer, any:client)
 
 		if (GetConVarBool(show_hud_armor))
 		{
+			ArmorHUDParams[client][0] = GetHUDXParams(client);
+			ArmorHUDParams[client][1] = GetHUDYParams(client);
+			ArmorHUDColor[client][0] = GetHUDColorR(client);
+			ArmorHUDColor[client][1] = GetHUDColorG(client);
+			ArmorHUDColor[client][2] = GetHUDColorB(client);
+
 			if (!IsClientObserver(client))
 			{
 				if (setting == 1 || setting == 0) //Generic style
 				{
-					SetHudTextParams(ArmorHUDParams[client][0], ArmorHUDParams[client][1], 1.0, 255, 90, 30, 255);
+					SetHudTextParams(ArmorHUDParams[client][0], ArmorHUDParams[client][1], 1.0, ArmorHUDColor[client][0], ArmorHUDColor[client][1], ArmorHUDColor[client][2], 255);
 					ShowSyncHudText(client, hHudText, "Armor: %i/Max Armor: %i", armor[client], MaxArmor[client]);
 				}
 
 				if (setting == 2) //DOOM Style
 				{
-					SetHudTextParams(ArmorHUDParams[client][0], ArmorHUDParams[client][1], 1.0, 255, 90, 30, 255);
+					SetHudTextParams(ArmorHUDParams[client][0], ArmorHUDParams[client][1], 1.0, ArmorHUDColor[client][0], ArmorHUDColor[client][1], ArmorHUDColor[client][2], 255);
 					ShowSyncHudText(client, hHudText, "Armor: %i/%i", armor[client], MaxArmor[client]);
 				}
 
 				if (setting == 3) //TFC/Quake Style
 				{
-					SetHudTextParams(ArmorHUDParams[client][0], ArmorHUDParams[client][1], 1.0, 255, 90, 30, 255);
+					SetHudTextParams(ArmorHUDParams[client][0], ArmorHUDParams[client][1], 1.0, ArmorHUDColor[client][0], ArmorHUDColor[client][1], ArmorHUDColor[client][2], 255);
 					ShowSyncHudText(client, hHudText, "Armor: %i", armor[client]);
 				}
 			}
@@ -393,19 +503,19 @@ public Action:DrawHud(Handle:timer, any:client)
 				{
 					if (setting == 1 || setting == 0) //Generic style
 					{
-						SetHudTextParams(ArmorHUDParams[client][0], ArmorHUDParams[client][1], 1.0, 255, 90, 30, 255);
+						SetHudTextParams(ArmorHUDParams[client][0], ArmorHUDParams[client][1], 1.0, ArmorHUDColor[client][0], ArmorHUDColor[client][1], ArmorHUDColor[client][2], 255);
 						ShowSyncHudText(client, hHudText, "Armor: %i/Max Armor: %i", armor[spec], MaxArmor[spec]);
 					}
 
 					if (setting == 2) //DOOM Style
 					{
-						SetHudTextParams(ArmorHUDParams[client][0], ArmorHUDParams[client][1], 1.0, 255, 90, 30, 255);
+						SetHudTextParams(ArmorHUDParams[client][0], ArmorHUDParams[client][1], 1.0, ArmorHUDColor[client][0], ArmorHUDColor[client][1], ArmorHUDColor[client][2], 255);
 						ShowSyncHudText(client, hHudText, "Armor: %i/%i", armor[spec], MaxArmor[spec]);
 					}
 
 					if (setting == 3) //TFC/Quake Style
 					{
-						SetHudTextParams(ArmorHUDParams[client][0], ArmorHUDParams[client][1], 1.0, 255, 90, 30, 255);
+						SetHudTextParams(ArmorHUDParams[client][0], ArmorHUDParams[client][1], 1.0, ArmorHUDColor[client][0], ArmorHUDColor[client][1], ArmorHUDColor[client][2], 255);
 						ShowSyncHudText(client, hHudText, "Armor: %i", armor[spec]);
 					}
 				}
@@ -550,7 +660,7 @@ public Action:Command_SetPlayerArmor(client, args) //THIS INTENTIONALLY OVERRIDE
 				GetArmorClass(target_list[i]);
 				armor[target_list[i]] = armorsize;
 				ArmorOverheal[target_list[i]] = true;
-				PrintToChat(target_list[i], "[Ad-Armor] You've been given %i Armor", armorsize);
+				CPrintToChat(target_list[i], "{red}[Ad-Armor]{default} You've been given %i Armor", armorsize);
 			}
 		}
 	}
@@ -575,7 +685,40 @@ public Action:Command_SetHudParams(client, args)
 		{
 			ArmorHUDParams[client][0] = params[0];
 			ArmorHUDParams[client][1] = params[1];
+			SetHUDXParams(client, ArmorHUDParams[client][0]);
+			SetHUDYParams(client, ArmorHUDParams[client][1]);
 			PrintToChat(client, "[Ad-Armor] You've changed your Armor HUD Parameters");
+		}
+	}
+	return Plugin_Continue;
+}
+public Action:Command_SetHudColor(client, args)
+{
+	if (GetConVarBool(plugin_enable) && GetConVarBool(allow_hud_color))
+	{
+		if (args != 3)
+		{
+			ReplyToCommand(client, "[Ad-Armor] Usage: sm_armorhudcolor <red: 0-255> <green: 0-255> <blue: 0-255>", GetConVarInt(setarmormax));
+			return Plugin_Handled;
+		}
+		decl String:red[10];
+		decl String:green[10];
+		decl String:blue[10];
+		GetCmdArg(1, red, sizeof(red));
+		GetCmdArg(2, green, sizeof(green));
+		GetCmdArg(3, blue, sizeof(blue));
+		decl params[3];
+		params[0] = StringToInt(red);
+		params[1] = StringToInt(green);
+		params[2] = StringToInt(blue);
+		{
+			ArmorHUDColor[client][0] = params[0];
+			ArmorHUDColor[client][1] = params[1];
+			ArmorHUDColor[client][2] = params[2];
+			SetHUDColorR(client, ArmorHUDColor[client][0]);
+			SetHUDColorG(client, ArmorHUDColor[client][1]);
+			SetHUDColorB(client, ArmorHUDColor[client][2]);
+			PrintToChat(client, "[Ad-Armor] You've changed your Armor HUD Color");
 		}
 	}
 	return Plugin_Continue;
@@ -663,7 +806,7 @@ public EntityOutput_OnPlayerTouch(const String:output[], caller, activator, Floa
 }
 public Action:TraceAttack(victim, &attacker, &inflictor, &Float:damage, &damagetype, &ammotype, hitbox, hitgroup)
 {
-	if (IsValidClient(attacker) && IsClientInGame(attacker) && IsPlayerAlive(attacker) && IsValidClient(victim) && IsClientInGame(victim) && IsPlayerAlive(victim))
+	if (GetConVarBool(plugin_enable) && IsValidClient(attacker) && IsClientInGame(attacker) && IsPlayerAlive(attacker) && IsValidClient(victim) && IsClientInGame(victim) && IsPlayerAlive(victim))
 	{
 		if (GetClientTeam(attacker) == GetClientTeam(victim))
 		{
@@ -704,7 +847,7 @@ public Action:TraceAttack(victim, &attacker, &inflictor, &Float:damage, &damaget
 						SetEntProp(attacker, Prop_Data, "m_iAmmo", iNewMetal, 4, 3);
 					}
 				}
-				/*if (StrEqual(classname, "tf_weapon_shotgun_primary", false) && wepindex == 527 && GetConVarBool(armor_from_widowmaker)) //widowmaker
+				/*if (StrEqual(classname, "tf_weapon_shotgun_primary", false) && wepindex == 527 && GetConVarBool(armor_from_widowmaker))
 				{
 					new repairshot = RoundFloat(damage);
 					if (armor[victim] >= 0 && armor[victim] < MaxArmor[victim])
@@ -730,45 +873,40 @@ public Action:TraceAttack(victim, &attacker, &inflictor, &Float:damage, &damaget
 }
 public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damagetype) 
 {
-	if (IsValidClient(attacker) && IsClientInGame(attacker) && IsValidClient(victim) && IsClientInGame(victim))
+	if (GetConVarBool(plugin_enable) && IsValidClient(attacker) && IsClientInGame(attacker) && IsValidClient(victim) && IsClientInGame(victim))
 	{
-		if (victim == attacker && !GetConVarBool(allow_self_hurt))
+		if ((victim == attacker && !GetConVarBool(allow_self_hurt)) || (GetConVarBool(allow_crit_pierce) && (damagetype & DMG_CRIT)))
 		{
-			return Plugin_Continue; //prevents soldiers/demos from destroying their own armor.
+			return Plugin_Continue; //prevents soldiers/demos from destroying their own armor but also allows crits to pierce through armor.
 		}
 		if (!GetConVarBool(allow_uber_damage) && (TF2_IsPlayerInCondition(victim, TFCond_Ubercharged) || TF2_IsPlayerInCondition(victim, TFCond_Bonked)))
 		{
-			return Plugin_Handled;
+			return Plugin_Continue; //prevent ubered players from losing armor
 		}
-		if (armor[victim] >= 1 && ArmorType[victim] != 0 && (GetClientTeam(attacker) != GetClientTeam(victim) || (victim == attacker && GetConVarBool(allow_self_hurt))))
+		if (armor[victim] >= 1 && ArmorType[victim] != 0 && GetClientTeam(attacker) != GetClientTeam(victim))
 		{
-			new Float:intdamage;
-			intdamage = damage; //save initial damage
-
-			if (ArmorType[victim] == 1)
-				DamageResistance[victim] = GetConVarFloat(damage_resistance_type1);
-			if (ArmorType[victim] == 2)
-				DamageResistance[victim] = GetConVarFloat(damage_resistance_type2);
-			if (ArmorType[victim] == 3)
-				DamageResistance[victim] = GetConVarFloat(damage_resistance_type3);
-			if (ArmorType[victim] == 4)
+			new dmgresist = ArmorType[victim];
+			switch (dmgresist)
 			{
-				//insert code here
+				case 1: DamageResistance[victim] = GetConVarFloat(damage_resistance_type1); //default 0.3
+				case 2: DamageResistance[victim] = GetConVarFloat(damage_resistance_type2); //default 0.6
+				case 3: DamageResistance[victim] = GetConVarFloat(damage_resistance_type3); //default 0.8
+				//case 4: insert code here
 			}
 
-			intdamage *= DamageResistance[victim]; //multiply it with armor type
-			armor[victim] -= RoundToCeil(intdamage); //subtract armor
-
-			if (armor[victim] < 1) //if armor goes under 1, transfer rest of damage to health.
+			new Float:intdamage = DamageResistance[victim]*damage;
+			armor[victim] -= RoundFloat(intdamage); //subtract armor
+			if (armor[victim] < 1) //if armor goes under 1, transfer rest of unabsorbed damage to health.
 			{
 				intdamage += armor[victim];
 				armor[victim] = 0;
 			}
 			damage -= intdamage;
+			//CPrintToChat(attacker, "{green}[Ad-Armor-Test]{cyan} final damage is %f", damage);
 			return Plugin_Changed;
 		}
 	}
-	return Plugin_Continue; 
+	return Plugin_Continue;
 }
 public GetArmorClass(client)
 {
@@ -831,6 +969,68 @@ public GetArmorClass(client)
 		}
 	}
 }
+public Action:ArmorHelp(client, args)
+{
+	if (!GetConVarBool(plugin_enable))
+	{
+		ReplyToCommand(client, "[Ad-Armor]{green} Advanced Armor is turned off");
+		return Plugin_Handled;
+	}
+        if (client && IsClientInGame(client) && !IsFakeClient(client))
+        {
+		new Handle:armorhalp = CreateMenu(MenuHandler_armorhalp);
+ 
+		SetMenuTitle(armorhalp, "Armor Help - Main Menu:");
+		AddMenuItem(armorhalp, "armrtype", "What's my Armor type?");
+		AddMenuItem(armorhalp, "cmds", "What are the available Commands?");
+		//AddMenuItem(armorhalp, "non", "None");
+		//SetMenuExitBackButton(armorhalp, true);
+		DisplayMenu(armorhalp, client, MENU_TIME_FOREVER);
+        }
+        return Plugin_Handled;
+}
+public MenuHandler_armorhalp(Handle:menu, MenuAction:action, client, param2)
+{
+	decl String:armar[32];
+	decl String:arg[32];
+	new name;
+	GetMenuItem(menu, param2, arg, sizeof(arg));
+	if (action == MenuAction_Select)
+        {
+		//SetBossCookie(client, VSHSpecial_None);
+		param2++;
+		if (param2 == 1)
+                {
+			name = ArmorType[client];
+			switch (name)
+			{
+				case 0: armar = "None";
+				case 1: armar = "Light Armor";
+				case 2: armar = "Medium Armor";
+				case 3: armar = "Heavy Armor";
+			}
+			CPrintToChat(client, "{red}[Ad-Armor]{default} Your Armor Type is {cyan}%s{default}, with damage resistance of {cyan}%f{default}", armar, DamageResistance[client]);
+                }
+		else if (param2 == 2)
+                {
+			CPrintToChat(client, "{red}[Ad-Armor]{default} The Available Commands are {green}'sm_armorhud'{default}, {green}'sm_armorhudparams'{default}, {green}'sm_setarmor' for admins{default}, and {green}'sm_armorhudcolor'");
+                }
+	}
+	else if (action == MenuAction_End)
+        {
+                CloseHandle(menu);
+        }
+}
+public Action:Timer_Announce(Handle:hTimer)
+{
+	if (GetConVarBool(plugin_enable))
+	{
+		CPrintToChatAll("{red}[Ad-Armor]{default} for help/info about Armor, type !armorhelp");
+	}
+}
+
+
+
 public OnAllPluginsLoaded() 
 {
 	new Handle:convar;
