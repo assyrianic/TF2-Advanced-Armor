@@ -8,7 +8,7 @@
 #include <updater>
 #include <morecolors>
 
-#define PLUGIN_VERSION "1.7.3"
+#define PLUGIN_VERSION "1.7.4"
 #define UPDATE_URL "https://bitbucket.org/assyrian/tf2-advanced-armor-plugin/raw/default/updater.txt"
 
 new armor[MAXPLAYERS+1];
@@ -101,8 +101,6 @@ new Handle:BlueCookie;
 new Handle:timer_bitch_convar = INVALID_HANDLE;
 
 new bool:g_bAutoUpdate;
-
-new bool:canCrit[MAXPLAYERS+1];
 
 //new Handle:g_hSdkEquipWearable; // handles viewmodels and world models; props to Friagram
 //new bool:g_bEwSdkStarted;
@@ -239,6 +237,7 @@ public OnPluginStart()
 	HookEvent("player_death", Event_PlayerDeath, EventHookMode_Pre);
         HookEvent("player_changeclass", event_changeclass);
 	HookEvent("player_spawn", event_player_spawn);
+	//HookEvent("player_healed", event_player_healed);
 	HookEntityOutput("item_ammopack_full", "OnPlayerTouch", EntityOutput_OnPlayerTouch);
 	HookEntityOutput("item_ammopack_medium", "OnPlayerTouch", EntityOutput_OnPlayerTouch);
 	HookEntityOutput("item_ammopack_small", "OnPlayerTouch", EntityOutput_OnPlayerTouch);
@@ -431,6 +430,42 @@ public Action:event_player_spawn(Handle:event, const String:name[], bool:dontBro
 	}
 	return Plugin_Continue;
 }
+/*public Action:event_player_healed(Handle:event, const String:name[], bool:dontBroadcast)
+{
+	new client = GetClientOfUserId(GetEventInt(event, "patient"));
+	if (!IsValidClient(client, false))
+		return Plugin_Continue;
+
+	if (GetConVarBool(plugin_enable) && GetConVarBool(armor_from_spencer))
+	{
+		if (!GetConVarBool(cvBlu) && GetClientTeam(client) == 3)
+			return Plugin_Continue;
+
+		if (!GetConVarBool(cvRed) && GetClientTeam(client) == 2)
+			return Plugin_Continue;
+
+		decl String:clsname[32];
+		new spencerrepair = GetConVarInt(spencer_to_armor);
+		new dispenser = -1;
+		while ((dispenser = FindEntityByClassname2(dispenser, "obj_dispenser")) != -1)
+		{
+			if (IsValidEntity(dispenser)) GetEdictClassname(dispenser, clsname, sizeof(clsname));
+			if (IsValidClient(client) && TF2_IsPlayerInCondition(client, TFCond_Healing) && strcmp(clsname, "obj_dispenser", false) == 0)
+			{
+				GetArmorClass(client);
+				if (MaxArmor[client] - armor[client] < spencerrepair)
+					spencerrepair = MaxArmor[client] - armor[client];
+
+				if (armor[client] < MaxArmor[client])
+					armor[client] += spencerrepair;
+
+				if (armor[client] > MaxArmor[client] && ArmorOverheal[client] == false)
+					armor[client] = MaxArmor[client];
+			}
+		}
+	}
+	return Plugin_Continue;
+}*/
 public Action:event_changeclass(Handle:event, const String:name[], bool:dontBroadcast)
 {
 	new client = GetClientOfUserId(GetEventInt(event, "userid"));
@@ -562,7 +597,7 @@ public Action:DispenserCheck(Handle:timer, any:client)
 		while ((dispenser = FindEntityByClassname2(dispenser, "obj_dispenser")) != -1)
 		{
 			if (IsValidEntity(dispenser)) GetEdictClassname(dispenser, clsname, sizeof(clsname));
-			if (IsValidEntity(client) && TF2_IsPlayerInCondition(client, TFCond_Healing) && strcmp(clsname, "obj_dispenser", false) == 0)
+			if (IsValidEntity(client) && TF2_IsPlayerInCondition(client, TFCond_Healing) && strcmp(clsname, "obj_dispenser", false) == 0 && !IsInHeal(client))
 			{
 				GetArmorClass(client);
 				if (MaxArmor[client] - armor[client] < spencerrepair)
@@ -594,7 +629,7 @@ public Action:Command_SetPlayerHUD(client, args)
 }
 public MenuHandler_SetHud(Handle:menu, MenuAction:action, client, param2)
 {
-	new String:hudslct[64];
+	decl String:hudslct[64];
 	GetMenuItem(menu, param2, hudslct, sizeof(hudslct));
 	if (action == MenuAction_Select)
         {
@@ -1100,6 +1135,35 @@ stock bool:IsValidClient(iClient, bool:bReplay = true)
 	if(bReplay && (IsClientSourceTV(iClient) || IsClientReplay(iClient)))
 		return false;
 	return true;
+}
+stock GetHealingTarget(client)
+{
+	new String:s[64];
+	new medigun = GetPlayerWeaponSlot(client, TFWeaponSlot_Secondary);
+	if (medigun <= MaxClients || !IsValidEdict(medigun))
+		return -1;
+	GetEdictClassname(medigun, s, sizeof(s));
+	if (strcmp(s, "tf_weapon_medigun", false) == 0)
+	{
+		if (GetEntProp(medigun, Prop_Send, "m_bHealing"))
+			return GetEntPropEnt(medigun, Prop_Send, "m_hHealingTarget");
+	}
+	return -1;
+}
+stock bool:IsInHeal(client)
+{
+	new bool:beinghealed;
+	for (new i = 1; i <= MaxClients; i++)
+	{
+		if (IsValidClient(i) && IsPlayerAlive(i) && GetHealingTarget(i) == client)
+		{
+			beinghealed = true;
+			break;
+		}
+		else
+			beinghealed = false;
+	}
+	return beinghealed;
 }
 /*stock bool:TF2_EwSdkStartup()
 {

@@ -4,16 +4,12 @@
 	{
 		"Version"
 		{
-			"Latest"	"1.7.3"
+			"Latest"	"1.7.4"
 		}
 		
-		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.7.3:"
-		"Notes"	"added a cvar that allows crit dmg to pierce armor"
-		"Notes"	"added HUD Parameters to cookies"
-		"Notes"	"added help menu"
-		"Notes"	"added advertising timers to alert players of the commands"
-		"Notes"	"added SetColor menu that let's players change the color of their Armor HUD"
-		"Notes" "refined damage-armor calculation more"
+		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.7.4:"
+		"Notes"	"added SetColor to save to cookies"
+		"Notes" "fixed Medic healing armor glitch with mediguns"
 	}
 	
 	"Files"
