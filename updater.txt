@@ -4,12 +4,15 @@
 	{
 		"Version"
 		{
-			"Latest"	"1.7.4"
+			"Latest"	"1.8.0"
 		}
 		
-		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.7.4:"
-		"Notes"	"added SetColor to save to cookies"
-		"Notes" "fixed Medic healing armor glitch with mediguns"
+		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.8.0:"
+		"Notes"	"fixed up getting Armor from Ammo a bit"
+		"Notes" "cleaned up code"
+		"Notes" "added cvar to allow bots to have armor or not"
+		"Notes" "added sound effects when gaining/losing armor and cvar to enable/disable those sounds"
+		"Notes" "fixed uber healing back armor"
 	}
 	
 	"Files"
