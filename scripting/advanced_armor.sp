@@ -8,7 +8,7 @@
 #include <updater>
 #include <morecolors>
 
-#define PLUGIN_VERSION "1.8.0"
+#define PLUGIN_VERSION "1.8.1"
 #define UPDATE_URL "https://bitbucket.org/assyrian/tf2-advanced-armor-plugin/raw/default/updater.txt"
 
 #define SoundArmorAdd "weapons/quake_ammo_pickup_remastered.wav"
@@ -21,7 +21,8 @@ new Float:ArmorHUDParams[MAXPLAYERS+1][2];
 new ArmorHUDColor[MAXPLAYERS+1][3];
 new ArmorRegenerate[MAXPLAYERS+1];
 new Float:DamageResistance[MAXPLAYERS+1];
-new bool:ArmorOverheal[MAXPLAYERS+1] = false;
+new bool:ArmorOverheal[MAXPLAYERS+1] = { false, ... };
+new bool:g_ArmorEquipped[MAXPLAYERS+1] = { true, ... };
 
 new Handle:hHudText;
 
@@ -35,6 +36,7 @@ new Handle:allow_crit_pierce = INVALID_HANDLE;
 new Handle:armorregen = INVALID_HANDLE;
 new Handle:show_hud_armor = INVALID_HANDLE;
 new Handle:armor_snd_allow = INVALID_HANDLE;
+new Handle:allow_damage_overwhelm = INVALID_HANDLE;
 
 new Handle:armor_from_spencer = INVALID_HANDLE;
 new Handle:spencer_time = INVALID_HANDLE;
@@ -62,7 +64,7 @@ new Handle:armor_from_fullammo = INVALID_HANDLE;
 new Handle:damage_resistance_type1 = INVALID_HANDLE;
 new Handle:damage_resistance_type2 = INVALID_HANDLE;
 new Handle:damage_resistance_type3 = INVALID_HANDLE;
-new Handle:damage_resistance_custom = INVALID_HANDLE;
+//new Handle:damage_resistance_custom = INVALID_HANDLE;
 
 new Handle:armortype_scout = INVALID_HANDLE;
 new Handle:armortype_soldier = INVALID_HANDLE;
@@ -107,6 +109,10 @@ new Handle:BlueCookie;
 
 new Handle:timer_bitch_convar = INVALID_HANDLE;
 
+new Handle:level1 = INVALID_HANDLE;
+new Handle:level2 = INVALID_HANDLE;
+new Handle:level3 = INVALID_HANDLE;
+
 new bool:g_bAutoUpdate;
 
 //new Handle:g_hSdkEquipWearable; // handles viewmodels and world models; props to Friagram
@@ -146,6 +152,9 @@ public OnPluginStart()
 	RegConsoleCmd("sm_armorhelp", ArmorHelp, "help menu for players");
 	RegConsoleCmd("sm_armorhudcolor", Command_SetHudColor, "let's players change their armor hud color");
 
+	RegConsoleCmd("armoron", CmdEnable);
+	RegConsoleCmd("armoroff", CmdDisable);
+
 	HUDCookie = RegClientCookie("adarmor_hudstyle", "player's selected hud style", CookieAccess_Public);
 	HUDParamsCookieX = RegClientCookie("adarmor_hudparamsx", "player's selected hud params x coordinate", CookieAccess_Public);
 	HUDParamsCookieY = RegClientCookie("adarmor_hudparamsy", "player's selected hud params y coordinate", CookieAccess_Public);
@@ -160,6 +169,8 @@ public OnPluginStart()
 	armor_bots_allow = CreateConVar("sm_adarmor_allow_bots", "1", "Enables bots to have armor", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 
 	armor_snd_allow = CreateConVar("sm_adarmor_allow_sound", "1", "Enables sounds when getting/losing armor", FCVAR_PLUGIN, true, 0.0, true, 1.0);
+
+	allow_damage_overwhelm = CreateConVar("sm_adarmor_allow_dmg_overwhelm", "1", "if damage depletes armor, transfer the rest of the damage to the player's health", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 
 	armor_from_engie = CreateConVar("sm_adarmor_armor_from_engie", "1", "Enable getting armor from engineer's metal", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 	show_hud_armor = CreateConVar("sm_adarmor_show_hud_armor", "1", "Enable HUD", FCVAR_PLUGIN, true, 0.0, true, 1.0);
@@ -179,6 +190,10 @@ public OnPluginStart()
 	armorregen = CreateConVar("sm_adarmor_armorregen", "0", "Enables armor regen", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 
 	armor_from_spencer = CreateConVar("sm_adarmor_armor_from_spencer", "1", "Enables armor from dispensers", FCVAR_PLUGIN, true, 0.0, true, 1.0);
+
+	level1 = CreateConVar("sm_adarmor_level1_repair", "0.0", "multiplier of how much armor level 1 dispensers will heal. Leave at 0.0 if you want level 1 dispensers to repair at sm_adarmor_dispenser_to_armor rate", FCVAR_PLUGIN|FCVAR_NOTIFY);
+	level2 = CreateConVar("sm_adarmor_level2_repair", "0.50", "multiplier of how much armor level 2 dispensers will heal. Leave at 0.0 if you want level 2 dispensers to repair at sm_adarmor_dispenser_to_armor rate", FCVAR_PLUGIN|FCVAR_NOTIFY);
+	level3 = CreateConVar("sm_adarmor_level3_repair", "1.0", "multiplier of how much armor level 3 dispensers will heal. Leave at 0.0 if you want level 3 dispensers to repair at sm_adarmor_dispenser_to_armor rate", FCVAR_PLUGIN|FCVAR_NOTIFY);
 
 	cvBlu = CreateConVar("sm_adarmor_blue", "1", "Enables armor for BLU team", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 	cvRed = CreateConVar("sm_adarmor_red", "1", "Enables armor for RED team", FCVAR_PLUGIN, true, 0.0, true, 1.0);
@@ -220,7 +235,7 @@ public OnPluginStart()
 
 	armor_from_fullammo = CreateConVar("sm_adarmor_fullammoarmor", "1.0", "give armor from full ammo packs by multiplying it with the players max armor they can get", FCVAR_PLUGIN|FCVAR_NOTIFY);
 
-	spencer_to_armor = CreateConVar("sm_adarmor_dispenser_to_armor", "1", "gives x amount of armor from dispensers", FCVAR_PLUGIN|FCVAR_NOTIFY);
+	spencer_to_armor = CreateConVar("sm_adarmor_dispenser_to_armor", "1", "gives x amount of armor from dispensers per rate from sm_adarmor_dispenser_time", FCVAR_PLUGIN|FCVAR_NOTIFY);
 
 	spencer_time = CreateConVar("sm_adarmor_dispenser_time", "0.2", "amount of rate/time dispensers will give armor", FCVAR_PLUGIN|FCVAR_NOTIFY);
 
@@ -231,7 +246,7 @@ public OnPluginStart()
 	damage_resistance_type1 = CreateConVar("sm_adarmor_damage_resistance_light", "0.3", "how much damage should Light Armor absorb", FCVAR_PLUGIN|FCVAR_NOTIFY);
 	damage_resistance_type2 = CreateConVar("sm_adarmor_damage_resistance_med", "0.6", "how much damage should Medium Armor absorb", FCVAR_PLUGIN|FCVAR_NOTIFY);
 	damage_resistance_type3 = CreateConVar("sm_adarmor_damage_resistance_heavy", "0.8", "how much damage should Heavy Armor absorb", FCVAR_PLUGIN|FCVAR_NOTIFY);
-	damage_resistance_custom = CreateConVar("sm_adarmor_damage_resistance_custom", "0.5", "how much damage should Custom Armor absorb", FCVAR_PLUGIN|FCVAR_NOTIFY);
+	//damage_resistance_custom = CreateConVar("sm_adarmor_damage_resistance_custom", "0.5", "how much damage should Custom Armor absorb", FCVAR_PLUGIN|FCVAR_NOTIFY);
 
 	armortype_scout = CreateConVar("sm_adarmor_armortype_scout", "1", "what armor type scout should get, 1 = light armor, 2 = medium, 3 = heavy", FCVAR_PLUGIN|FCVAR_NOTIFY);
 	armortype_soldier = CreateConVar("sm_adarmor_armortype_soldier", "3", "what armor type soldier should get, 1 = light armor, 2 = medium, 3 = heavy", FCVAR_PLUGIN|FCVAR_NOTIFY);
@@ -289,7 +304,7 @@ public OnClientPutInServer(client)
 		SDKHook(client, SDKHook_TraceAttack, TraceAttack);
 
 		if (clienttimer[client] == INVALID_HANDLE)
-			clienttimer[client] = CreateTimer(0.2, DrawHud, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+			clienttimer[client] = CreateTimer(0.1, DrawHud, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
 
 		if (clientarmorregen[client] == INVALID_HANDLE)
 			clientarmorregen[client] = CreateTimer(1.0, ArmorRegen, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
@@ -426,6 +441,7 @@ public Action:event_player_spawn(Handle:event, const String:name[], bool:dontBro
 	new client = GetClientOfUserId(GetEventInt(event, "userid"));
 	if (!IsValidClient(client, false))
 		return Plugin_Continue;
+	//GetClassHealth(client);
 
 	if (GetConVarBool(plugin_enable))
 	{
@@ -439,6 +455,9 @@ public Action:event_player_spawn(Handle:event, const String:name[], bool:dontBro
 			return Plugin_Continue;
 
 		if (!GetConVarBool(armor_bots_allow) && IsFakeClient(client) && IsClientInGame(client))
+			return Plugin_Continue;
+
+		if (g_ArmorEquipped[client] == false)
 			return Plugin_Continue;
 
 		GetArmorClass(client);
@@ -479,6 +498,20 @@ public Action:Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
 	}
 	return Plugin_Continue;
 }
+public Action:CmdEnable(client, iAction)
+{
+	ReplyToCommand(client, "Equipping Armor");
+	g_ArmorEquipped[client] = true;
+	GetArmorClass(client);
+	return Plugin_Handled;
+}
+
+public Action:CmdDisable(client, iAction)
+{
+	ReplyToCommand(client, "Unequipping Armor");
+	g_ArmorEquipped[client] = false;
+	return Plugin_Handled;
+}
 public Action:DrawHud(Handle:timer, any:client)
 {
 	new setting = GetHUDSetting(client);
@@ -489,6 +522,9 @@ public Action:DrawHud(Handle:timer, any:client)
 
 		if (!GetConVarBool(cvRed) && GetClientTeam(client) == 2)
 			return Plugin_Handled;
+
+		//if (g_ArmorEquipped[client] == false)
+		//	return Plugin_Handled;
 
 		if (GetConVarBool(show_hud_armor))
 		{
@@ -554,14 +590,20 @@ public Action:ArmorRegen(Handle:timer, any:client)
 	{
 		if (!GetConVarBool(cvBlu) && GetClientTeam(client) == 3)
 			return Plugin_Handled;
+
 		if (!GetConVarBool(cvRed) && GetClientTeam(client) == 2)
 			return Plugin_Handled;
+
 		if (!GetConVarBool(armor_bots_allow) && IsFakeClient(client) && IsClientInGame(client))
 			return Plugin_Handled;
 
+		if (g_ArmorEquipped[client] == false)
+			return Plugin_Handled;
+
 		GetArmorClass(client);
-		if (MaxArmor[client] - armor[client] < ArmorRegenerate[client])
-			ArmorRegenerate[client] = MaxArmor[client] - armor[client];
+		ArmorRegenerate[client] = (MaxArmor[client] - armor[client] < ArmorRegenerate[client]) ? MaxArmor[client] - armor[client] : ArmorRegenerate[client];
+		//if (MaxArmor[client] - armor[client] < ArmorRegenerate[client])
+		//	ArmorRegenerate[client] = MaxArmor[client] - armor[client];
 
 		if (armor[client] < MaxArmor[client])
 		{
@@ -570,15 +612,14 @@ public Action:ArmorRegen(Handle:timer, any:client)
 				EmitSoundToClient(client, SoundArmorAdd);
 		}
 
-		if (armor[client] > MaxArmor[client] && ArmorOverheal[client] == false)
-			armor[client] = MaxArmor[client];
+		armor[client] = (armor[client] > MaxArmor[client] && ArmorOverheal[client] == false) ? MaxArmor[client] : armor[client];
+		//	armor[client] = MaxArmor[client];
 	}
 	return Plugin_Continue;
 }
 public Action:DispenserCheck(Handle:timer, any:client)
 {
 	new spencerrepair = GetConVarInt(spencer_to_armor);
-
 	if (!IsValidClient(client, false))
 		return Plugin_Handled;
 
@@ -586,28 +627,39 @@ public Action:DispenserCheck(Handle:timer, any:client)
 	{
 		if (!GetConVarBool(cvBlu) && GetClientTeam(client) == 3)
 			return Plugin_Handled;
+
 		if (!GetConVarBool(cvRed) && GetClientTeam(client) == 2)
 			return Plugin_Handled;
+
 		if (!GetConVarBool(armor_bots_allow) && IsFakeClient(client) && IsClientInGame(client))
 			return Plugin_Handled;
 
-		if (!GetConVarBool(uber_heal_armor) && (TF2_IsPlayerInCondition(client, TFCond_Ubercharged) || TF2_IsPlayerInCondition(client, TFCond_MegaHeal)))
+		if (g_ArmorEquipped[client] == false)
+			return Plugin_Handled;
+
+		if (!GetConVarBool(uber_heal_armor) && (TF2_IsPlayerInCondition(client, TFCond_Ubercharged) || TF2_IsPlayerInCondition(client, TFCond_MegaHeal))) //this basically let's medics heal their own armor by being ubered cuz stupid healing affixtures.
 			return Plugin_Handled;
 
 		if (IsNearSpencer(client) && !IsInHeal(client) && TF2_IsPlayerInCondition(client, TFCond_Healing)) //IDK why, but this glitches.
 		{
+			new lvl = GetDispenserLevel();
+			switch (lvl)
+			{
+				case 1: spencerrepair += RoundFloat(spencerrepair*GetConVarFloat(level1));
+				case 2: spencerrepair += RoundFloat(spencerrepair*GetConVarFloat(level2));
+				case 3: spencerrepair += RoundFloat(spencerrepair*GetConVarFloat(level3));
+			}
 			GetArmorClass(client);
-			if (MaxArmor[client] - armor[client] < spencerrepair)
-				spencerrepair = MaxArmor[client] - armor[client];
-
+			spencerrepair = (MaxArmor[client] - armor[client] < spencerrepair) ? MaxArmor[client] - armor[client] : spencerrepair;
+			//	spencerrepair = MaxArmor[client] - armor[client];
 			if (armor[client] < MaxArmor[client])
 			{
 				armor[client] += spencerrepair;
 				if (GetConVarBool(armor_snd_allow))
 					EmitSoundToClient(client, SoundArmorAdd);
 			}
-			if (armor[client] > MaxArmor[client] && ArmorOverheal[client] == false)
-				armor[client] = MaxArmor[client];
+			armor[client] = (armor[client] > MaxArmor[client] && ArmorOverheal[client] == false) ? MaxArmor[client] : armor[client];
+				//armor[client] = MaxArmor[client];
 			//CPrintToChat(client, "{green}[Ad-Armor-Test]{cyan} gaining armor");
 		}
 	}
@@ -630,27 +682,21 @@ public Action:Command_SetPlayerHUD(client, args)
 public MenuHandler_SetHud(Handle:menu, MenuAction:action, client, param2)
 {
 	decl String:hudslct[64];
+	new int;
 	GetMenuItem(menu, param2, hudslct, sizeof(hudslct));
 	if (action == MenuAction_Select)
         {
                 param2++;
-		if (param2 == 1)
-                {
-			SetHUDSetting(client, 1);
-                }
-		else if (param2 == 2)
-                {
-			SetHUDSetting(client, 2);
-                }
-		else if (param2 == 3)
-                {
-			SetHUDSetting(client, 3);
-                }
+		int = (param2 == 1) ? 1 : 
+			(param2 == 2) ? 2 : 
+			(param2 == 3) ? 3 : 
+			0;
+		SetHUDSetting(client, int);
 	}
 	else if (action == MenuAction_End)
         {
-                CloseHandle(menu);
-        }
+		CloseHandle(menu);
+	}
 }
 public Action:Command_SetPlayerArmor(client, args) //THIS INTENTIONALLY OVERRIDES TEAM RESTRICTIONS ON ARMOR
 {
@@ -694,7 +740,7 @@ public Action:Command_SetPlayerArmor(client, args) //THIS INTENTIONALLY OVERRIDE
 			{
 				GetArmorClass(target_list[i]);
 				armor[target_list[i]] = armorsize;
-				ArmorOverheal[target_list[i]] = true;
+				ArmorOverheal[target_list[i]] = (armorsize > MaxArmor[target_list[i]]) ? true : false;
 				CPrintToChat(target_list[i], "{red}[Ad-Armor]{default} You've been given %i Armor", armorsize);
 			}
 		}
@@ -774,8 +820,8 @@ public EntityOutput_OnPlayerTouch(const String:output[], caller, activator, Floa
 					GetArmorClass(activator);
 					new fullpack = RoundFloat(MaxArmor[activator]*GetConVarFloat(armor_from_fullammo));
 
-					if (MaxArmor[activator] - armor[activator] < fullpack)
-						fullpack = MaxArmor[activator] - armor[activator];
+					fullpack = (MaxArmor[activator] - armor[activator] < fullpack) ? MaxArmor[activator] - armor[activator] : fullpack;
+					//	fullpack = MaxArmor[activator] - armor[activator];
 
 					if (armor[activator] < MaxArmor[activator])
 					{
@@ -784,14 +830,16 @@ public EntityOutput_OnPlayerTouch(const String:output[], caller, activator, Floa
 							EmitSoundToClient(activator, SoundArmorAdd);
 					}
 
-					if (armor[activator] > MaxArmor[activator] && ArmorOverheal[activator] == false)
-						armor[activator] = MaxArmor[activator];
+					armor[activator] = ((armor[activator] > MaxArmor[activator] && ArmorOverheal[activator] == false) ? MaxArmor[activator] : armor[activator]);
+						//armor[activator] = MaxArmor[activator];
 
 					if (!GetConVarBool(cvBlu) && GetClientTeam(activator) == 3)
 						armor[activator] = 0;
 					if (!GetConVarBool(cvRed) && GetClientTeam(activator) == 2)
 						armor[activator] = 0;
 					if (!GetConVarBool(armor_bots_allow) && IsFakeClient(activator) && IsClientInGame(activator))
+						armor[activator] = 0;
+					if (g_ArmorEquipped[activator] == false)
 						armor[activator] = 0;
 				}
 			}
@@ -802,8 +850,8 @@ public EntityOutput_OnPlayerTouch(const String:output[], caller, activator, Floa
 					GetArmorClass(activator);
 					new mediumpack = RoundFloat(MaxArmor[activator]*GetConVarFloat(armor_from_medammo));
 
-					if (MaxArmor[activator] - armor[activator] < mediumpack)
-						mediumpack = MaxArmor[activator] - armor[activator];
+					mediumpack = (MaxArmor[activator] - armor[activator] < mediumpack) ? MaxArmor[activator] - armor[activator] : mediumpack;
+						//mediumpack = MaxArmor[activator] - armor[activator];
 
 					if (armor[activator] < MaxArmor[activator])
 					{
@@ -812,14 +860,16 @@ public EntityOutput_OnPlayerTouch(const String:output[], caller, activator, Floa
 							EmitSoundToClient(activator, SoundArmorAdd);
 					}
 
-					if (armor[activator] > MaxArmor[activator] && ArmorOverheal[activator] == false)
-						armor[activator] = MaxArmor[activator];
+					armor[activator] = ((armor[activator] > MaxArmor[activator] && ArmorOverheal[activator] == false) ? MaxArmor[activator] : armor[activator]);
+						//armor[activator] = MaxArmor[activator];
 
 					if (!GetConVarBool(cvBlu) && GetClientTeam(activator) == 3)
 						armor[activator] = 0;
 					if (!GetConVarBool(cvRed) && GetClientTeam(activator) == 2)
 						armor[activator] = 0;
 					if (!GetConVarBool(armor_bots_allow) && IsFakeClient(activator) && IsClientInGame(activator))
+						armor[activator] = 0;
+					if (g_ArmorEquipped[activator] == false)
 						armor[activator] = 0;
 				}
 			}
@@ -830,8 +880,8 @@ public EntityOutput_OnPlayerTouch(const String:output[], caller, activator, Floa
 					GetArmorClass(activator);
 					new smallpack = RoundFloat(MaxArmor[activator]*GetConVarFloat(armor_from_smallammo));
 
-					if (MaxArmor[activator] - armor[activator] < smallpack)
-						smallpack = MaxArmor[activator] - armor[activator];
+					smallpack = (MaxArmor[activator] - armor[activator] < smallpack) ? MaxArmor[activator] - armor[activator] : smallpack;
+						//smallpack = MaxArmor[activator] - armor[activator];
 
 					if (armor[activator] < MaxArmor[activator])
 					{
@@ -840,14 +890,16 @@ public EntityOutput_OnPlayerTouch(const String:output[], caller, activator, Floa
 							EmitSoundToClient(activator, SoundArmorAdd);
 					}
 
-					if (armor[activator] > MaxArmor[activator] && ArmorOverheal[activator] == false)
-						armor[activator] = MaxArmor[activator];
+					armor[activator] = ((armor[activator] > MaxArmor[activator] && ArmorOverheal[activator] == false) ? MaxArmor[activator] : armor[activator]);
+						//armor[activator] = MaxArmor[activator];
 
 					if (!GetConVarBool(cvBlu) && GetClientTeam(activator) == 3)
 						armor[activator] = 0;
 					if (!GetConVarBool(cvRed) && GetClientTeam(activator) == 2)
 						armor[activator] = 0;
 					if (!GetConVarBool(armor_bots_allow) && IsFakeClient(activator) && IsClientInGame(activator))
+						armor[activator] = 0;
+					if (g_ArmorEquipped[activator] == false)
 						armor[activator] = 0;
 				}
 			}
@@ -868,6 +920,8 @@ public Action:TraceAttack(victim, &attacker, &inflictor, &Float:damage, &damaget
 					return Plugin_Handled;
 				if (!GetConVarBool(armor_bots_allow) && IsFakeClient(victim) && IsClientInGame(victim))
 					return Plugin_Handled;
+				if (g_ArmorEquipped[victim] == false)
+					return Plugin_Handled;
 
 				GetArmorClass(victim);
 				new iCurrentMetal = GetEntProp(attacker, Prop_Data, "m_iAmmo", 4, 3);
@@ -883,16 +937,17 @@ public Action:TraceAttack(victim, &attacker, &inflictor, &Float:damage, &damaget
 				{
 					if (armor[victim] >= 0 && armor[victim] < MaxArmor[victim])
 					{
-						if (iCurrentMetal < repairamount)
-							repairamount = iCurrentMetal;
+						repairamount = (iCurrentMetal < repairamount) ? iCurrentMetal : repairamount;
+							//repairamount = iCurrentMetal;
 
-						if (MaxArmor[victim] - armor[victim] < repairamount*mult) /*becomes 50 by default*/
-							repairamount = RoundToCeil(float((MaxArmor[victim] - armor[victim])/mult));
+						repairamount = (MaxArmor[victim] - armor[victim] < repairamount*mult) ? RoundToCeil(float((MaxArmor[victim] - armor[victim])/mult)) : repairamount;
+						//if (MaxArmor[victim] - armor[victim] < repairamount*mult) /*becomes 50 by default*/
+						//	repairamount = RoundToCeil(float((MaxArmor[victim] - armor[victim])/mult));
 
 						armor[victim] += repairamount*mult;
 
-						if (armor[victim] > MaxArmor[victim])
-							armor[victim] = MaxArmor[victim];
+						armor[victim] = ((armor[victim] > MaxArmor[victim]) ? MaxArmor[victim] : armor[victim]);
+							//armor[victim] = MaxArmor[victim];
 
 						new iNewMetal = iCurrentMetal - repairamount;
 						SetEntProp(attacker, Prop_Data, "m_iAmmo", iNewMetal, 4, 3);
@@ -947,7 +1002,7 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 				case 1: DamageResistance[victim] = GetConVarFloat(damage_resistance_type1); //default 0.3
 				case 2: DamageResistance[victim] = GetConVarFloat(damage_resistance_type2); //default 0.6
 				case 3: DamageResistance[victim] = GetConVarFloat(damage_resistance_type3); //default 0.8
-				case 4: DamageResistance[victim] = GetConVarFloat(damage_resistance_custom); //default 0.5
+				//case 4: DamageResistance[victim] = GetConVarFloat(damage_resistance_custom); //default 0.5
 			}
 
 			new Float:intdamage = DamageResistance[victim]*damage;
@@ -959,7 +1014,8 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 			}
 			if (armor[victim] < 1) //if armor goes under 1, transfer rest of unabsorbed damage to health.
 			{
-				intdamage += armor[victim];
+				if (GetConVarBool(allow_damage_overwhelm))
+					intdamage += armor[victim];
 				armor[victim] = 0;
 			}
 			damage -= intdamage;
@@ -1027,6 +1083,50 @@ public GetArmorClass(client)
 			MaxArmor[client] = GetConVarInt(maxarmor_spy);
 			ArmorType[client] = GetConVarInt(armortype_spy);
 			ArmorRegenerate[client] = GetConVarInt(armorregen_spy);
+		}
+	}
+}
+public GetClassHealth(client)
+{
+	new TFClassType:healthabove = TF2_GetPlayerClass(client);
+	new max = GetEntProp(client, Prop_Data, "m_iMaxHealth");
+	switch (healthabove)
+	{
+		case TFClass_Scout:
+		{
+			g_ArmorEquipped[client] = (max > 125) ? false : true;
+		}
+		case TFClass_Soldier:
+		{
+			g_ArmorEquipped[client] = (max > 200) ? false : true;
+		}
+		case TFClass_Pyro:
+		{
+			g_ArmorEquipped[client] = (max > 175) ? false : true;
+		}
+		case TFClass_DemoMan:
+		{
+			g_ArmorEquipped[client] = (max > 175) ? false : true;
+		}
+		case TFClass_Heavy:
+		{
+			g_ArmorEquipped[client] = (max > 300) ? false : true;
+		}
+		case TFClass_Engineer:
+		{
+			g_ArmorEquipped[client] = (max > 150) ? false : true;
+		}
+		case TFClass_Medic:
+		{
+			g_ArmorEquipped[client] = (max > 150) ? false : true;
+		}
+		case TFClass_Sniper:
+		{
+			g_ArmorEquipped[client] = (max > 150) ? false : true;
+		}
+		case TFClass_Spy:
+		{
+			g_ArmorEquipped[client] = (max > 150) ? false : true;
 		}
 	}
 }
@@ -1140,7 +1240,6 @@ public OnLibraryAdded(const String:name[])
 		Updater_AddPlugin(UPDATE_URL);
 	}
 }
-
 public Action:Updater_OnPluginDownloading()
 {
 	if (!g_bAutoUpdate)
@@ -1149,7 +1248,6 @@ public Action:Updater_OnPluginDownloading()
 	}
 	return Plugin_Continue;
 }
-
 public Updater_OnPluginUpdated() 
 {
 	ReloadPlugin();
@@ -1171,11 +1269,11 @@ stock FindEntityByClassname2(startEnt, const String:classname[])
 }
 stock bool:IsValidClient(iClient, bool:bReplay = true)
 {
-	if(iClient <= 0 || iClient > MaxClients)
+	if (iClient <= 0 || iClient > MaxClients)
 		return false;
-	if(!IsClientInGame(iClient))
+	if (!IsClientInGame(iClient))
 		return false;
-	if(bReplay && (IsClientSourceTV(iClient) || IsClientReplay(iClient)))
+	if (bReplay && (IsClientSourceTV(iClient) || IsClientReplay(iClient)))
 		return false;
 	return true;
 }
@@ -1228,10 +1326,22 @@ stock bool:IsNearSpencer(client)
 				}
 			}
 			else
+			{
 				dispenserheal = false;
+			}
 		}
 	}
 	return dispenserheal;
+}
+stock GetDispenserLevel()
+{
+	new level;
+	new spencer = -1;
+	while ((spencer = FindEntityByClassname2(spencer, "obj_dispenser")) != -1)
+	{
+		level = (IsValidEntity(spencer)) ? GetEntProp(spencer, Prop_Send, "m_iUpgradeLevel") : -1;
+	}
+	return level;
 }
 /*stock bool:TF2_EwSdkStartup()
 {

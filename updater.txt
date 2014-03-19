@@ -4,15 +4,15 @@
 	{
 		"Version"
 		{
-			"Latest"	"1.8.0"
+			"Latest"	"1.8.1"
 		}
 		
-		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.8.0:"
-		"Notes"	"fixed up getting Armor from Ammo a bit"
-		"Notes" "cleaned up code"
-		"Notes" "added cvar to allow bots to have armor or not"
-		"Notes" "added sound effects when gaining/losing armor and cvar to enable/disable those sounds"
-		"Notes" "fixed uber healing back armor"
+		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.8.1:"
+		"Notes"	"cleaned up code more"
+		"Notes" "added "armoron" and "armoroff" commands to allow players to (un)equip armor at will."
+		"Notes" "Updated Dispenser code so that Dispenser levels will affect armor healing rate"
+		"Notes" "added cvar to allow if damage completely destroys armor and transfers the rest of the damage to player health."
+		"Notes" "few bufgixes"
 	}
 	
 	"Files"
