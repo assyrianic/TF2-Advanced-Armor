@@ -8,7 +8,7 @@
 #include <updater>
 #include <morecolors>
 
-#define PLUGIN_VERSION "1.8.2"
+#define PLUGIN_VERSION "1.8.3"
 #define UPDATE_URL "https://bitbucket.org/assyrian/tf2-advanced-armor-plugin/raw/default/updater.txt"
 
 #define SoundArmorAdd "weapons/quake_ammo_pickup_remastered.wav"
@@ -464,7 +464,7 @@ public Action:event_player_spawn(Handle:event, const String:name[], bool:dontBro
 {
 	new client = GetClientOfUserId(GetEventInt(event, "userid"));
 	if (!IsValidClient(client, false)) return Plugin_Continue;
-	GetClassHealth(client);
+	//GetClassHealth(client);
 
 	if (GetConVarBool(plugin_enable))
 	{

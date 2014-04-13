@@ -4,16 +4,11 @@
 	{
 		"Version"
 		{
-			"Latest"	"1.8.2"
+			"Latest"	"1.8.3"
 		}
 		
-		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.8.2:"
-		"Notes"	"added '!reloadarmor' for admins/server ops to reload armor configs in a lazy way :), default flag is config"
-		"Notes" "added special Armor classes so players can have armor that blocks only certain types of damage"
-		"Notes" "Added Luck & Chance armor."
-		"Notes" "the new armor classes are Kevlar (blocks bullets + non-explosive/fire projectiles), Blast (for explosives), and Asbestos Armor (for fire-based weapons) but they are in alpha stage and glitchy; best not to use until fixed"
-		"Notes" "Added cvar that allows the HUD to be powered by a 0.2 second timer or using SDKHooks PreThink which updates every client frame"
-		"Notes" "Seriously fixed the medic healing giving armor glitch."
+		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.8.3:"
+		"Notes"	"small, little fix"
 	}
 	
 	"Files"
