@@ -4,11 +4,12 @@
 	{
 		"Version"
 		{
-			"Latest"	"1.8.3"
+			"Latest"	"1.8.4"
 		}
 		
-		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.8.3:"
-		"Notes"	"small, little fix"
+		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.8.4:"
+		"Notes"	"put HUD code into one function for easier updating"
+		"Notes"	"Updated Armor Type with enums"
 	}
 	
 	"Files"
