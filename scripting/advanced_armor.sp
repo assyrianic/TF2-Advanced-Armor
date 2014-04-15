@@ -2,13 +2,12 @@
 #include <sdkhooks>
 #include <tf2>
 #include <tf2_stocks>
-#include <tf2items>
 #include <clientprefs>
 #undef REQUIRE_PLUGIN
 #include <updater>
 #include <morecolors>
 
-#define PLUGIN_VERSION "1.8.4"
+#define PLUGIN_VERSION "1.9.0"
 #define UPDATE_URL "https://bitbucket.org/assyrian/tf2-advanced-armor-plugin/raw/default/updater.txt"
 
 #define SoundArmorAdd "weapons/quake_ammo_pickup_remastered.wav"
@@ -25,11 +24,7 @@ enum
 	Armor_Medium,
 	Armor_Heavy,
 	Armor_Luck, //absorbs damage by probability
-	Armor_Chance, //absorbs fatal damage by probability
-	Armor_Kevlar, //absorbs bullet
-	Armor_Blast, //absorbs explosives
-	Armor_Asbestos, //absorbs fire
-	Armor_Melee //steel? Mithril?
+	Armor_Chance //absorbs fatal damage by probability
 }
 new Float:ArmorHUDParams[MAXPLAYERS+1][2];
 new ArmorHUDColor[MAXPLAYERS+1][3];
@@ -84,10 +79,6 @@ new Handle:damage_resistance_type1 = INVALID_HANDLE;
 new Handle:damage_resistance_type2 = INVALID_HANDLE;
 new Handle:damage_resistance_type3 = INVALID_HANDLE;
 new Handle:damage_resistance_chance = INVALID_HANDLE;
-new Handle:damage_resistance_bullet = INVALID_HANDLE;
-new Handle:damage_resistance_explosive = INVALID_HANDLE;
-new Handle:damage_resistance_fire = INVALID_HANDLE;
-new Handle:damage_resistance_melee = INVALID_HANDLE;
 
 new Handle:armortype_scout = INVALID_HANDLE;
 new Handle:armortype_soldier = INVALID_HANDLE;
@@ -168,6 +159,7 @@ public OnPluginStart()
 	hHudText = CreateHudSynchronizer();
 
 	RegAdminCmd("sm_setarmor", Command_SetPlayerArmor, ADMFLAG_KICK);
+	RegAdminCmd("sm_armortype", Command_SetPlayerArmorType, ADMFLAG_KICK);
 	RegConsoleCmd("sm_armorhud", Command_SetPlayerHUD, "Let's a player set his/her Armor hud style");
 	RegConsoleCmd("sm_armorhudparams", Command_SetHudParams, "Let's a player set his/her Armor hud params");
 	RegConsoleCmd("sm_armorhelp", ArmorHelp, "help menu for players");
@@ -226,7 +218,7 @@ public OnPluginStart()
 	cvBlu = CreateConVar("sm_adarmor_blue", "1", "Enables armor for BLU team", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 	cvRed = CreateConVar("sm_adarmor_red", "1", "Enables armor for RED team", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 
-        CreateConVar("sm_adarmor_version", PLUGIN_VERSION, "Advanced Armor version", FCVAR_NOTIFY|FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_DONTRECORD);
+        CreateConVar("sm_adarmor_version", PLUGIN_VERSION, "Advanced Armor version", FCVAR_NOTIFY|FCVAR_PLUGIN);
 
 	maxarmor_scout = CreateConVar("sm_adarmor_scout_maxarmor", "50", "sets how much max armor scout will have", FCVAR_PLUGIN|FCVAR_NOTIFY);
 	maxarmor_soldier = CreateConVar("sm_adarmor_soldier_maxarmor", "200", "sets how much max armor soldier will have", FCVAR_PLUGIN|FCVAR_NOTIFY);
@@ -277,10 +269,6 @@ public OnPluginStart()
 	damage_resistance_type2 = CreateConVar("sm_adarmor_damage_resistance_med", "0.6", "how much damage should Medium Armor absorb", FCVAR_PLUGIN|FCVAR_NOTIFY);
 	damage_resistance_type3 = CreateConVar("sm_adarmor_damage_resistance_heavy", "0.8", "how much damage should Heavy Armor absorb", FCVAR_PLUGIN|FCVAR_NOTIFY);
 	damage_resistance_chance = CreateConVar("sm_adarmor_damage_resistance_chance", "0.25", "how much damage should Luck Armor absorb", FCVAR_PLUGIN|FCVAR_NOTIFY);
-	damage_resistance_bullet = CreateConVar("sm_adarmor_damage_resistance_kevlar", "0.50", "how much damage should Kevlar (bullets, not explosive/fire projectiles) Armor absorb", FCVAR_PLUGIN|FCVAR_NOTIFY);
-	damage_resistance_explosive = CreateConVar("sm_adarmor_damage_resistance_blast", "0.50", "how much damage should Explosive/Blast Armor absorb", FCVAR_PLUGIN|FCVAR_NOTIFY);
-	damage_resistance_fire = CreateConVar("sm_adarmor_damage_resistance_asbestos", "0.50", "how much damage should Asbestos/Fire Armor absorb", FCVAR_PLUGIN|FCVAR_NOTIFY);
-	damage_resistance_melee = CreateConVar("sm_adarmor_damage_resistance_melee", "0.50", "how much damage should Melee Armor absorb", FCVAR_PLUGIN|FCVAR_NOTIFY);
 
 
 
@@ -322,6 +310,63 @@ public OnPluginStart()
 		OnClientPutInServer(i);
 	}
 }
+////////////////////////////////natives/forwards//////////////////////////////////////////////////
+public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
+{
+	CreateNative("GetArmorType", Native_GetArmorType);
+	CreateNative("SetArmorType", Native_SetArmorType);
+	CreateNative("GetMaxArmor", Native_GetMaxArmor);
+	CreateNative("SetMaxArmor", Native_SetMaxArmor);
+	CreateNative("GetCurrentArmor", Native_GetCurrentArmor);
+	CreateNative("SetCurrentArmor", Native_SetCurrentArmor);
+	CreateNative("GetArmorDamageResistance", Native_GetArmorDamageResistance);
+	CreateNative("SetArmorDamageResistance", Native_SetArmorDamageResistance);
+	CreateNative("IsNearDispenser", Native_IsNearDispenser);
+	RegPluginLibrary("adarmor");
+	return APLRes_Success;
+}
+public Native_GetArmorType(Handle:plugin, numParams)
+{
+	return ArmorType[GetNativeCell(1)];
+}
+public Native_SetArmorType(Handle:plugin, numParams)
+{
+	new client = GetNativeCell(1), type = GetNativeCell(2);
+	if (IsValidClient(client)) ArmorType[client] = type;
+}
+public Native_GetMaxArmor(Handle:plugin, numParams)
+{
+	return MaxArmor[GetNativeCell(1)];
+}
+public Native_SetMaxArmor(Handle:plugin, numParams)
+{
+	new client = GetNativeCell(1), maxarmor = GetNativeCell(2);
+	if (IsValidClient(client)) MaxArmor[client] = maxarmor;
+}
+public Native_GetCurrentArmor(Handle:plugin, args)
+{
+	return armor[GetNativeCell(1)];
+}
+public Native_SetCurrentArmor(Handle:plugin, numParams)
+{
+	new client = GetNativeCell(1), armount = GetNativeCell(2);
+	if (IsValidClient(client)) armor[client] = armount;
+}
+public Native_GetArmorDamageResistance(Handle:plugin, numParams)
+{
+	return _:DamageResistance[GetNativeCell(1)];
+}
+public Native_SetArmorDamageResistance(Handle:plugin, numParams)
+{
+	new client = GetNativeCell(1), Float:dmgfloat = Float:GetNativeCell(2);
+	if (IsValidClient(client)) DamageResistance[client] = dmgfloat;
+}
+public Native_IsNearDispenser(Handle:plugin, numParams)
+{
+	return IsNearSpencer(GetNativeCell(1));
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 public OnConfigsExecuted()
 {
 	CreateTimer(GetConVarFloat(timer_bitch_convar), Timer_Announce, _, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
@@ -487,7 +532,10 @@ public Action:event_player_spawn(Handle:event, const String:name[], bool:dontBro
 	{
 		armor[client] = 0;
 		ArmorOverheal[client] = false;
-		GetArmorClass(client);
+
+		GetMaxArmor(client);
+		GetArmorType(client);
+		GetDamageResistanceArmor(client);
 
 		if (!GetConVarBool(cvBlu) && GetClientTeam(client) == 3) return Plugin_Continue;
 
@@ -539,7 +587,11 @@ public Action:CmdReloadCFG(client, iAction)
 	ServerCommand("sm_rcon exec sourcemod/advanced_armor.cfg");
 	for (new i = 1; i <= MaxClients; i++)
 	{
-		if (IsClientInGame(i) || IsValidClient(i)) GetArmorClass(i);
+		if (IsClientInGame(i) && IsValidClient(i))
+		{
+			GetMaxArmor(i);
+			GetArmorType(i);
+		}
 	}
 	ReplyToCommand(client, "Reloading Armor Config");
 	return Plugin_Handled;
@@ -548,7 +600,7 @@ public Action:CmdEnable(client, iAction)
 {
 	if (IsClientInGame(client) && IsValidClient(client)) g_bArmorEquipped[client] = true;
 	ReplyToCommand(client, "Equipping Armor");
-	GetArmorClass(client);
+	GetMaxArmor(client);
 	return Plugin_Handled;
 }
 
@@ -590,7 +642,7 @@ public Action:ArmorRegen(Handle:timer, any:client)
 
 		if (g_bArmorEquipped[client] == false) return Plugin_Handled;
 
-		GetArmorClass(client);
+		GetArmorRegen(client);
 		if (MaxArmor[client] - armor[client] < ArmorRegenerate[client])
 			ArmorRegenerate[client] = MaxArmor[client] - armor[client];
 
@@ -629,7 +681,7 @@ public Action:DispenserCheck(Handle:timer, any:client)
 				case 2: spencerrepair += RoundFloat(spencerrepair*GetConVarFloat(level2));
 				case 3: spencerrepair += RoundFloat(spencerrepair*GetConVarFloat(level3));
 			}
-			GetArmorClass(client);
+			GetMaxArmor(client);
 			if (MaxArmor[client] - armor[client] < spencerrepair)
 				spencerrepair = (MaxArmor[client] - armor[client]);
 
@@ -678,7 +730,50 @@ public MenuHandler_SetHud(Handle:menu, MenuAction:action, client, param2)
 		CloseHandle(menu);
 	}
 }
-public Action:Command_SetPlayerArmor(client, args) //THIS INTENTIONALLY OVERRIDES TEAM RESTRICTIONS ON ARMOR
+public Action:Command_SetPlayerArmorType(client, args)
+{
+	if (GetConVarBool(plugin_enable))
+	{
+		if (args < 2)
+		{
+			ReplyToCommand(client, "[Ad-Armor] Usage: sm_armortype <target> <none,light,medium,heavy,luck,chance>");
+			return Plugin_Handled;
+		}
+		decl String:targetname[PLATFORM_MAX_PATH];
+		decl String:typeofarmor[32];
+		GetCmdArg(1, targetname, sizeof(targetname));
+		GetCmdArg(2, typeofarmor, sizeof(typeofarmor));
+		new String:target_name[MAX_TARGET_LENGTH];
+		new target_list[MAXPLAYERS+1], target_count;
+		new bool:tn_is_ml;
+		if ((target_count = ProcessTargetString(
+				targetname,
+				client,
+				target_list,
+				MAXPLAYERS,
+				COMMAND_FILTER_ALIVE,
+				target_name,
+				sizeof(target_name),
+				tn_is_ml)) <= 0)
+		{
+			/* This function replies to the admin with a failure message */
+			ReplyToTargetError(client, target_count);
+			return Plugin_Handled;
+		}
+		for (new i = 0; i < target_count; i++)
+		{
+			if (StrContains(typeofarmor, "None", false) != -1) ArmorType[target_list[i]] = Armor_None;
+			else if (StrContains(typeofarmor, "Light", false) != -1) ArmorType[target_list[i]] = Armor_Light;
+			else if (StrContains(typeofarmor, "Medium", false) != -1) ArmorType[target_list[i]] = Armor_Medium;
+			else if (StrContains(typeofarmor, "Heavy", false) != -1) ArmorType[target_list[i]] = Armor_Heavy;
+			else if (StrContains(typeofarmor, "Luck", false) != -1) ArmorType[target_list[i]] = Armor_Luck;
+			else if (StrContains(typeofarmor, "Chance", false) != -1) ArmorType[target_list[i]] = Armor_Chance;
+			CPrintToChat(target_list[i], "{red}[Ad-Armor]{default} You're Armor Type is now %s Armor", typeofarmor);
+		}
+	}
+	return Plugin_Continue;
+}
+public Action:Command_SetPlayerArmor(client, args)//THIS INTENTIONALLY OVERRIDES TEAM RESTRICTIONS ON ARMOR
 {
 	if (GetConVarBool(plugin_enable))
 	{
@@ -718,7 +813,7 @@ public Action:Command_SetPlayerArmor(client, args) //THIS INTENTIONALLY OVERRIDE
 		{
 			if ((armorsize >= 0) && (armorsize <= GetConVarInt(setarmormax)) && IsPlayerAlive(target_list[i]))
 			{
-				GetArmorClass(target_list[i]);
+				GetMaxArmor(target_list[i]);
 				armor[target_list[i]] = armorsize;
 				ArmorOverheal[target_list[i]] = (armorsize > MaxArmor[target_list[i]]) ? true : false;
 				CPrintToChat(target_list[i], "{red}[Ad-Armor]{default} You've been given {green}%i{default} Armor", armorsize);
@@ -802,7 +897,7 @@ public EntityOutput_OnPlayerTouch(const String:output[], caller, activator, Floa
 						 return;
 					if (g_bArmorEquipped[activator] == false) return;
 
-					GetArmorClass(activator);
+					GetMaxArmor(activator);
 					new fullpack = RoundFloat(MaxArmor[activator]*GetConVarFloat(armor_from_fullammo));
 
 					fullpack = (MaxArmor[activator] - armor[activator] < fullpack) ? MaxArmor[activator] - armor[activator] : fullpack;
@@ -828,7 +923,7 @@ public EntityOutput_OnPlayerTouch(const String:output[], caller, activator, Floa
 						 return;
 					if (g_bArmorEquipped[activator] == false) return;
 
-					GetArmorClass(activator);
+					GetMaxArmor(activator);
 					new mediumpack = RoundFloat(MaxArmor[activator]*GetConVarFloat(armor_from_medammo));
 
 					mediumpack = (MaxArmor[activator] - armor[activator] < mediumpack) ? MaxArmor[activator] - armor[activator] : mediumpack;
@@ -854,7 +949,7 @@ public EntityOutput_OnPlayerTouch(const String:output[], caller, activator, Floa
 						 return;
 					if (g_bArmorEquipped[activator] == false) return;
 
-					GetArmorClass(activator);
+					GetMaxArmor(activator);
 					new smallpack = RoundFloat(MaxArmor[activator]*GetConVarFloat(armor_from_smallammo));
 
 					smallpack = (MaxArmor[activator] - armor[activator] < smallpack) ? MaxArmor[activator] - armor[activator] : smallpack;
@@ -887,7 +982,7 @@ public Action:TraceAttack(victim, &attacker, &inflictor, &Float:damage, &damaget
 				if (!GetConVarBool(armor_bots_allow) && IsFakeClient(victim) && IsClientInGame(victim)) return Plugin_Handled;
 				if (g_bArmorEquipped[victim] == false) return Plugin_Handled;
 
-				GetArmorClass(victim);
+				GetMaxArmor(victim);
 				new iCurrentMetal = GetEntProp(attacker, Prop_Data, "m_iAmmo", 4, 3);
 				new repairamount = GetConVarInt(armor_from_metal); //default 10
 				new mult = GetConVarInt(armor_from_metal_mult); //default 5
@@ -956,40 +1051,12 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 		}
 		if (armor[victim] >= 1 && ArmorType[victim] != Armor_None && GetClientTeam(attacker) != GetClientTeam(victim))
 		{
-			new dmgresist = ArmorType[victim];
-/*
-Damagetype Int List
-
-*/
-			switch (dmgresist)
+			if (ArmorType[victim] == Armor_Chance) //life armor
 			{
-				case Armor_Light: DamageResistance[victim] = GetConVarFloat(damage_resistance_type1); //default 0.3
-				case Armor_Medium: DamageResistance[victim] = GetConVarFloat(damage_resistance_type2); //default 0.6
-				case Armor_Heavy: DamageResistance[victim] = GetConVarFloat(damage_resistance_type3); //default 0.8
-				case Armor_Luck: 
-				{
-					new chance = GetRandomInt(1, 10);
-					DamageResistance[victim] = (chance > GetConVarInt(luck_armor_chance)) ? GetConVarFloat(damage_resistance_chance) : 0.0;
-					//default 0.25
-				}
-				case Armor_Chance: //life armor
-				{
-					new health = GetClientHealth(victim);
-					new Float:lifearmor = GetConVarFloat(life_armor_chance);
-					new Float:life = GetRandomFloat(1.0, 10.0);
-					if (damage > health)
-					{
-						DamageResistance[victim] = 1.0;
-						if (life > lifearmor) damage = float(armor[victim]);
-					}
-				} //THE WEAPON DAMAGE BASED ARMOR IS DERPED AS FUCK.
-				case Armor_Kevlar: DamageResistance[victim] = (damagetype == (538968064 || 2097154 || 3278850 || 540016640 || 4098)) ? GetConVarFloat(damage_resistance_bullet) : 0.0;
-
-				case Armor_Blast: DamageResistance[victim] = (damagetype == (2359360 || 262208 || 2490432 || 3539008 || 1310784 || 3407936)) ? GetConVarFloat(damage_resistance_explosive) : 0.0;
-
-				case Armor_Asbestos: DamageResistance[victim] = (damagetype == (2056 || 16779264 || 16777218 || 17827840)) ? GetConVarFloat(damage_resistance_fire) : 0.0;
-
-				case Armor_Melee: DamageResistance[victim] = (damagetype == 134221952) ? GetConVarFloat(damage_resistance_melee) : 0.0;
+				new health = GetClientHealth(victim);
+				new Float:lifearmor = GetConVarFloat(life_armor_chance);
+				new Float:life = GetRandomFloat(1.0, 10.0);
+				if (damage > health) if (life > lifearmor) damage = float(armor[victim]);
 			}
 			new Float:intdamage = DamageResistance[victim]*damage;
 			armor[victim] -= RoundFloat(intdamage); //subtract armor
@@ -1013,65 +1080,69 @@ Damagetype Int List
 	}
 	return Plugin_Continue;
 }
-public GetArmorClass(client)
+public GetMaxArmor(client)
 {
-	new TFClassType:armoron = TF2_GetPlayerClass(client);
-	switch (armoron)
+	new TFClassType:maxarmor = TF2_GetPlayerClass(client);
+	switch (maxarmor)
 	{
-		case TFClass_Scout:
+		case TFClass_Scout: MaxArmor[client] = GetConVarInt(maxarmor_scout);
+		case TFClass_Soldier: MaxArmor[client] = GetConVarInt(maxarmor_soldier);
+		case TFClass_Pyro: MaxArmor[client] = GetConVarInt(maxarmor_pyro);
+		case TFClass_DemoMan: MaxArmor[client] = GetConVarInt(maxarmor_demo);
+		case TFClass_Heavy: MaxArmor[client] = GetConVarInt(maxarmor_heavy);
+		case TFClass_Engineer: MaxArmor[client] = GetConVarInt(maxarmor_engie);
+		case TFClass_Medic: MaxArmor[client] = GetConVarInt(maxarmor_med);
+		case TFClass_Sniper: MaxArmor[client] = GetConVarInt(maxarmor_sniper);
+		case TFClass_Spy: MaxArmor[client] = GetConVarInt(maxarmor_spy);
+	}
+}
+public GetDamageResistanceArmor(client)
+{
+	new dmgresist = ArmorType[client];
+	switch (dmgresist)
+	{
+		case Armor_Light: DamageResistance[client] = GetConVarFloat(damage_resistance_type1); //default 0.3
+		case Armor_Medium: DamageResistance[client] = GetConVarFloat(damage_resistance_type2); //default 0.6
+		case Armor_Heavy: DamageResistance[client] = GetConVarFloat(damage_resistance_type3); //default 0.8
+		case Armor_Luck: 
 		{
-			MaxArmor[client] = GetConVarInt(maxarmor_scout);
-			ArmorType[client] = GetConVarInt(armortype_scout);
-			ArmorRegenerate[client] = GetConVarInt(armorregen_scout);
+			new chance = GetRandomInt(1, 10);
+			DamageResistance[client] = (chance > GetConVarInt(luck_armor_chance)) ? GetConVarFloat(damage_resistance_chance) : 0.0;
+			//default 0.25
 		}
-		case TFClass_Soldier:
-		{
-			MaxArmor[client] = GetConVarInt(maxarmor_soldier);
-			ArmorType[client] = GetConVarInt(armortype_soldier);
-			ArmorRegenerate[client] = GetConVarInt(armorregen_soldier);
-		}
-		case TFClass_Pyro:
-		{
-			MaxArmor[client] = GetConVarInt(maxarmor_pyro);
-			ArmorType[client] = GetConVarInt(armortype_pyro);
-			ArmorRegenerate[client] = GetConVarInt(armorregen_pyro);
-		}
-		case TFClass_DemoMan:
-		{
-			MaxArmor[client] = GetConVarInt(maxarmor_demo);
-			ArmorType[client] = GetConVarInt(armortype_demo);
-			ArmorRegenerate[client] = GetConVarInt(armorregen_demo);
-		}
-		case TFClass_Heavy:
-		{
-			MaxArmor[client] = GetConVarInt(maxarmor_heavy);
-			ArmorType[client] = GetConVarInt(armortype_heavy);
-			ArmorRegenerate[client] = GetConVarInt(armorregen_heavy);
-		}
-		case TFClass_Engineer:
-		{
-			MaxArmor[client] = GetConVarInt(maxarmor_engie);
-			ArmorType[client] = GetConVarInt(armortype_engie);
-			ArmorRegenerate[client] = GetConVarInt(armorregen_engie);
-		}
-		case TFClass_Medic:
-		{
-			MaxArmor[client] = GetConVarInt(maxarmor_med);
-			ArmorType[client] = GetConVarInt(armortype_med);
-			ArmorRegenerate[client] = GetConVarInt(armorregen_med);
-		}
-		case TFClass_Sniper:
-		{
-			MaxArmor[client] = GetConVarInt(maxarmor_sniper);
-			ArmorType[client] = GetConVarInt(armortype_sniper);
-			ArmorRegenerate[client] = GetConVarInt(armorregen_sniper);
-		}
-		case TFClass_Spy:
-		{
-			MaxArmor[client] = GetConVarInt(maxarmor_spy);
-			ArmorType[client] = GetConVarInt(armortype_spy);
-			ArmorRegenerate[client] = GetConVarInt(armorregen_spy);
-		}
+		case Armor_Chance: DamageResistance[client] = 1.0;
+	}
+}
+public GetArmorType(client)
+{
+	new TFClassType:armortype = TF2_GetPlayerClass(client);
+	switch (armortype)
+	{
+		case TFClass_Scout: ArmorType[client] = GetConVarInt(armortype_scout);
+		case TFClass_Soldier: ArmorType[client] = GetConVarInt(armortype_soldier);
+		case TFClass_Pyro: ArmorType[client] = GetConVarInt(armortype_pyro);
+		case TFClass_DemoMan: ArmorType[client] = GetConVarInt(armortype_demo);
+		case TFClass_Heavy: ArmorType[client] = GetConVarInt(armortype_heavy);
+		case TFClass_Engineer: ArmorType[client] = GetConVarInt(armortype_engie);
+		case TFClass_Medic: ArmorType[client] = GetConVarInt(armortype_med);
+		case TFClass_Sniper: ArmorType[client] = GetConVarInt(armortype_sniper);
+		case TFClass_Spy: ArmorType[client] = GetConVarInt(armortype_spy);
+	}
+}
+public GetArmorRegen(client)
+{
+	new TFClassType:regen = TF2_GetPlayerClass(client);
+	switch (regen)
+	{
+		case TFClass_Scout: ArmorRegenerate[client] = GetConVarInt(armorregen_scout);
+		case TFClass_Soldier: ArmorRegenerate[client] = GetConVarInt(armorregen_soldier);
+		case TFClass_Pyro: ArmorRegenerate[client] = GetConVarInt(armorregen_pyro);
+		case TFClass_DemoMan: ArmorRegenerate[client] = GetConVarInt(armorregen_demo);
+		case TFClass_Heavy: ArmorRegenerate[client] = GetConVarInt(armorregen_heavy);
+		case TFClass_Engineer: ArmorRegenerate[client] = GetConVarInt(armorregen_engie);
+		case TFClass_Medic: ArmorRegenerate[client] = GetConVarInt(armorregen_med);
+		case TFClass_Sniper: ArmorRegenerate[client] = GetConVarInt(armorregen_sniper);
+		case TFClass_Spy: ArmorRegenerate[client] = GetConVarInt(armorregen_spy);
 	}
 }
 public GetClassHealth(client)
@@ -1091,7 +1162,6 @@ public GetClassHealth(client)
 		case TFClass_Spy: g_bArmorEquipped[client] = (max > 150) ? false : true;
 	}
 }
-
 public Action:ArmorHelp(client, args)
 {
 	if (!GetConVarBool(plugin_enable))
@@ -1157,26 +1227,6 @@ public MenuHandler_armorhalp(Handle:menu, MenuAction:action, client, param2)
 					armar = "Life Armor";
 					resist = 0.0;
 				}
-				case Armor_Kevlar:
-				{
-					armar = "Kevlar Armor";
-					resist = GetConVarFloat(damage_resistance_bullet);
-				}
-				case Armor_Blast:
-				{
-					armar = "Blast Armor";
-					resist = GetConVarFloat(damage_resistance_explosive);
-				}
-				case Armor_Asbestos:
-				{
-					armar = "Asbestos Armor";
-					resist = GetConVarFloat(damage_resistance_fire);
-				}
-				case Armor_Melee:
-				{
-					armar = "Melee Armor";
-					resist = GetConVarFloat(damage_resistance_melee);
-				}
 			}
 			CPrintToChat(client, "{red}[Ad-Armor]{default} Your Armor Type is {cyan}%s{default}, with Damage Absorption Rate of {cyan}%f{default}", armar, resist);
                 }
@@ -1197,7 +1247,6 @@ public Action:Timer_Announce(Handle:hTimer)
 		CPrintToChatAll("{red}[Ad-Armor]{default} for help/info about Armor, type !armorhelp");
 	}
 }
-
 
 //UPDATER CRAP//
 public OnAllPluginsLoaded() 
@@ -1378,4 +1427,3 @@ stock GetDispenserLevel()
 	CloseHandle(hGameConf);
 	return true;
 }*/
-//////////////////natives/forwards////////////////////

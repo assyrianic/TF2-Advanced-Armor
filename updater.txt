@@ -4,12 +4,13 @@
 	{
 		"Version"
 		{
-			"Latest"	"1.8.4"
+			"Latest"	"1.9.0"
 		}
 		
-		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.8.4:"
-		"Notes"	"put HUD code into one function for easier updating"
-		"Notes"	"Updated Armor Type with enums"
+		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.9.0:"
+		"Notes"	"Separated armor check function into 3 separate functions"
+		"Notes"	"added command that lets admins change player(s) Armor Type on the fly."
+		"Notes"	"added natives for plugins :)"
 	}
 	
 	"Files"
