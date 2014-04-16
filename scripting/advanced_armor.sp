@@ -7,7 +7,7 @@
 #include <updater>
 #include <morecolors>
 
-#define PLUGIN_VERSION "1.9.0"
+#define PLUGIN_VERSION "1.9.1"
 #define UPDATE_URL "https://bitbucket.org/assyrian/tf2-advanced-armor-plugin/raw/default/updater.txt"
 
 #define SoundArmorAdd "weapons/quake_ammo_pickup_remastered.wav"
@@ -297,7 +297,7 @@ public OnPluginStart()
 	//g_bEwSdkStarted = TF2_EwSdkStartup();
 
 	HookEvent("player_death", Event_PlayerDeath, EventHookMode_Pre);
-        HookEvent("player_changeclass", event_changeclass);
+	HookEvent("player_changeclass", event_changeclass);
 	HookEvent("player_spawn", event_player_spawn);
 	HookEntityOutput("item_ammopack_full", "OnPlayerTouch", EntityOutput_OnPlayerTouch);
 	HookEntityOutput("item_ammopack_medium", "OnPlayerTouch", EntityOutput_OnPlayerTouch);
@@ -322,7 +322,8 @@ public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
 	CreateNative("GetArmorDamageResistance", Native_GetArmorDamageResistance);
 	CreateNative("SetArmorDamageResistance", Native_SetArmorDamageResistance);
 	CreateNative("IsNearDispenser", Native_IsNearDispenser);
-	RegPluginLibrary("adarmor");
+	CreateNative("AllowArmorOverheal", Native_AllowArmorOverheal);
+	RegPluginLibrary("advanced_armor");
 	return APLRes_Success;
 }
 public Native_GetArmorType(Handle:plugin, numParams)
@@ -364,6 +365,10 @@ public Native_SetArmorDamageResistance(Handle:plugin, numParams)
 public Native_IsNearDispenser(Handle:plugin, numParams)
 {
 	return IsNearSpencer(GetNativeCell(1));
+}
+public Native_AllowArmorOverheal(Handle:plugin, numParams)
+{
+	return ArmorOverheal[GetNativeCell(1)];
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1037,7 +1042,7 @@ public Action:TraceAttack(victim, &attacker, &inflictor, &Float:damage, &damaget
 	}
 	return Plugin_Continue;
 }
-public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damagetype) 
+public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damagetype)
 {
 	if (GetConVarBool(plugin_enable) && IsValidClient(attacker) && IsClientInGame(attacker) && IsValidClient(victim) && IsClientInGame(victim))
 	{

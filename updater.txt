@@ -4,13 +4,12 @@
 	{
 		"Version"
 		{
-			"Latest"	"1.9.0"
+			"Latest"	"1.9.1"
 		}
 		
-		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.9.0:"
-		"Notes"	"Separated armor check function into 3 separate functions"
-		"Notes"	"added command that lets admins change player(s) Armor Type on the fly."
-		"Notes"	"added natives for plugins :)"
+		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.9.1:"
+		"Notes"	"some code improvements"
+		"Notes"	"fixed bug with natives, they are now fully functional"
 	}
 	
 	"Files"
