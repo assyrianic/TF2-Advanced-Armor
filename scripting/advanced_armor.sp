@@ -7,7 +7,7 @@
 #include <updater>
 #include <morecolors>
 
-#define PLUGIN_VERSION "1.9.1"
+#define PLUGIN_VERSION "1.9.2"
 #define UPDATE_URL "https://bitbucket.org/assyrian/tf2-advanced-armor-plugin/raw/default/updater.txt"
 
 #define SoundArmorAdd "weapons/quake_ammo_pickup_remastered.wav"
@@ -102,9 +102,7 @@ new Handle:armorregen_spy = INVALID_HANDLE;
 
 //need moar handles lulz
 
-new Handle:clienttimer[MAXPLAYERS+1] = INVALID_HANDLE;
-new Handle:clientarmorregen[MAXPLAYERS+1] = INVALID_HANDLE;
-new Handle:lazycoding[MAXPLAYERS+1] = INVALID_HANDLE;
+new Handle:ClientTimers[MAXPLAYERS+1][3];
 new Handle:armorspawn = INVALID_HANDLE;
 new Handle:setarmormax = INVALID_HANDLE;
 
@@ -272,23 +270,23 @@ public OnPluginStart()
 
 
 
-	armortype_scout = CreateConVar("sm_adarmor_armortype_scout", "1", "ArmorType for Scout; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5), Kevlar(6), Blast(7), Abestos(8), Melee(9); LAST 4 DON'T WORK", FCVAR_PLUGIN|FCVAR_NOTIFY);
+	armortype_scout = CreateConVar("sm_adarmor_armortype_scout", "1", "ArmorType for Scout; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5)", FCVAR_PLUGIN|FCVAR_NOTIFY);
 
-	armortype_soldier = CreateConVar("sm_adarmor_armortype_soldier", "3", "Armor Type for Soldier; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5), Kevlar(6), Blast(7), Abestos(8), Melee(9); LAST 4 DON'T WORK", FCVAR_PLUGIN|FCVAR_NOTIFY);
+	armortype_soldier = CreateConVar("sm_adarmor_armortype_soldier", "3", "Armor Type for Soldier; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5)", FCVAR_PLUGIN|FCVAR_NOTIFY);
 
-	armortype_pyro = CreateConVar("sm_adarmor_armortype_pyro", "2", "Armor Type for Pyro; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5), Kevlar(6), Blast(7), Abestos(8), Melee(9); LAST 4 DON'T WORK", FCVAR_PLUGIN|FCVAR_NOTIFY);
+	armortype_pyro = CreateConVar("sm_adarmor_armortype_pyro", "2", "Armor Type for Pyro; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5)", FCVAR_PLUGIN|FCVAR_NOTIFY);
 
-	armortype_demo = CreateConVar("sm_adarmor_armortype_demo", "2", "Armor Type for Demoman; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5), Kevlar(6), Blast(7), Abestos(8), Melee(9); LAST 4 DON'T WORK", FCVAR_PLUGIN|FCVAR_NOTIFY);
+	armortype_demo = CreateConVar("sm_adarmor_armortype_demo", "2", "Armor Type for Demoman; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5)", FCVAR_PLUGIN|FCVAR_NOTIFY);
 
-	armortype_heavy = CreateConVar("sm_adarmor_armortype_heavy", "3", "Armor Type for Heavy; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5), Kevlar(6), Blast(7), Abestos(8), Melee(9); LAST 4 DON'T WORK", FCVAR_PLUGIN|FCVAR_NOTIFY);
+	armortype_heavy = CreateConVar("sm_adarmor_armortype_heavy", "3", "Armor Type for Heavy; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5)", FCVAR_PLUGIN|FCVAR_NOTIFY);
 
-	armortype_engie = CreateConVar("sm_adarmor_armortype_engie", "2", "Armor Type for Engineer; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5), Kevlar(6), Blast(7), Abestos(8), Melee(9); LAST 4 DON'T WORK", FCVAR_PLUGIN|FCVAR_NOTIFY);
+	armortype_engie = CreateConVar("sm_adarmor_armortype_engie", "2", "Armor Type for Engineer; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5)", FCVAR_PLUGIN|FCVAR_NOTIFY);
 
-	armortype_med = CreateConVar("sm_adarmor_armortype_med", "2", "Armor Type for Medic; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5), Kevlar(6), Blast(7), Abestos(8), Melee(9); LAST 4 DON'T WORK", FCVAR_PLUGIN|FCVAR_NOTIFY);
+	armortype_med = CreateConVar("sm_adarmor_armortype_med", "2", "Armor Type for Medic; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5)", FCVAR_PLUGIN|FCVAR_NOTIFY);
 
-	armortype_sniper = CreateConVar("sm_adarmor_armortype_sniper", "1", "Armor Type for Sniper; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5), Kevlar(6), Blast(7), Abestos(8), Melee(9); LAST 4 DON'T WORK", FCVAR_PLUGIN|FCVAR_NOTIFY);
+	armortype_sniper = CreateConVar("sm_adarmor_armortype_sniper", "1", "Armor Type for Sniper; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5)", FCVAR_PLUGIN|FCVAR_NOTIFY);
 
-	armortype_spy = CreateConVar("sm_adarmor_armortype_spy", "2", "Armor Type for Spy; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5), Kevlar(6), Blast(7), Abestos(8), Melee(9); LAST 4 DON'T WORK", FCVAR_PLUGIN|FCVAR_NOTIFY);
+	armortype_spy = CreateConVar("sm_adarmor_armortype_spy", "2", "Armor Type for Spy; Light(1), Medium(2), Heavy(3), Luck(4), Chance(5)", FCVAR_PLUGIN|FCVAR_NOTIFY);
 
 
 
@@ -299,6 +297,7 @@ public OnPluginStart()
 	HookEvent("player_death", Event_PlayerDeath, EventHookMode_Pre);
 	HookEvent("player_changeclass", event_changeclass);
 	HookEvent("player_spawn", event_player_spawn);
+	HookEvent("post_inventory_application", Event_Resupply);
 	HookEntityOutput("item_ammopack_full", "OnPlayerTouch", EntityOutput_OnPlayerTouch);
 	HookEntityOutput("item_ammopack_medium", "OnPlayerTouch", EntityOutput_OnPlayerTouch);
 	HookEntityOutput("item_ammopack_small", "OnPlayerTouch", EntityOutput_OnPlayerTouch);
@@ -322,7 +321,6 @@ public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
 	CreateNative("GetArmorDamageResistance", Native_GetArmorDamageResistance);
 	CreateNative("SetArmorDamageResistance", Native_SetArmorDamageResistance);
 	CreateNative("IsNearDispenser", Native_IsNearDispenser);
-	CreateNative("AllowArmorOverheal", Native_AllowArmorOverheal);
 	RegPluginLibrary("advanced_armor");
 	return APLRes_Success;
 }
@@ -366,10 +364,6 @@ public Native_IsNearDispenser(Handle:plugin, numParams)
 {
 	return IsNearSpencer(GetNativeCell(1));
 }
-public Native_AllowArmorOverheal(Handle:plugin, numParams)
-{
-	return ArmorOverheal[GetNativeCell(1)];
-}
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 public OnConfigsExecuted()
@@ -380,9 +374,10 @@ public OnClientDisconnect(client)
 {
 	MaxArmor[client] = 0;
 	ArmorType[client] = Armor_None;
-	ClearTimer(clienttimer[client]);
-	ClearTimer(clientarmorregen[client]);
-	ClearTimer(lazycoding[client]);
+	for (new i = 0; i < 3; i++)
+	{
+		if (ClientTimers[client][i] == INVALID_HANDLE) ClearTimer(ClientTimers[client][i]);
+	}
 }
 public OnMapStart()
 {
@@ -397,11 +392,11 @@ public OnClientPutInServer(client)
 		SDKHook(client, SDKHook_TraceAttack, TraceAttack);
 		if (GetConVarBool(HUD_PreThink)) SDKHook(client, SDKHook_PreThink, OnPreThink);
 
-		if (!GetConVarBool(HUD_PreThink)) clienttimer[client] = (clienttimer[client] == INVALID_HANDLE) ? CreateTimer(0.2, DrawHud, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE) : INVALID_HANDLE;
+		if (!GetConVarBool(HUD_PreThink)) ClientTimers[client][0] = (ClientTimers[client][0] == INVALID_HANDLE) ? CreateTimer(0.2, DrawHud, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE) : INVALID_HANDLE;
 
-		clientarmorregen[client] = (clientarmorregen[client] == INVALID_HANDLE) ? CreateTimer(1.0, ArmorRegen, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE) : INVALID_HANDLE;
+		ClientTimers[client][1] = (ClientTimers[client][1] == INVALID_HANDLE) ? CreateTimer(1.0, ArmorRegen, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE) : INVALID_HANDLE;
 
-		lazycoding[client] = (lazycoding[client] == INVALID_HANDLE) ? CreateTimer(GetConVarFloat(spencer_time), DispenserCheck, client, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT) : INVALID_HANDLE;
+		ClientTimers[client][2] = (ClientTimers[client][2] == INVALID_HANDLE) ? CreateTimer(GetConVarFloat(spencer_time), DispenserCheck, client, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT) : INVALID_HANDLE;
 
 		if (GetConVarBool(plugin_enable))
 		{
@@ -412,6 +407,8 @@ public OnClientPutInServer(client)
 				SetHUDColorB(client, 90);
 			}
 			armor[client] = 0;
+			MaxArmor[client] = 0;
+			ArmorType[client] = Armor_None;
 		}
 	}
 }
@@ -539,7 +536,7 @@ public Action:event_player_spawn(Handle:event, const String:name[], bool:dontBro
 		ArmorOverheal[client] = false;
 
 		GetMaxArmor(client);
-		GetArmorType(client);
+		if (ArmorType[client] == Armor_None) GetArmorType(client);
 		GetDamageResistanceArmor(client);
 
 		if (!GetConVarBool(cvBlu) && GetClientTeam(client) == 3) return Plugin_Continue;
@@ -629,6 +626,7 @@ public OnPreThink(client) //powers the HUD
 public Action:DrawHud(Handle:timer, any:client)
 {
 	if (GetConVarBool(HUD_PreThink)) return Plugin_Stop;
+	if (!IsValidClient(client)) return Plugin_Handled;
 	if (!GetConVarBool(cvBlu) && GetClientTeam(client) == 3) return Plugin_Handled;
 	if (!GetConVarBool(cvRed) && GetClientTeam(client) == 2) return Plugin_Handled;
 	if (IsFakeClient(client) && IsClientInGame(client)) return Plugin_Stop;
@@ -666,7 +664,6 @@ public Action:DispenserCheck(Handle:timer, any:client)
 {
 	new spencerrepair = GetConVarInt(spencer_to_armor);
 	if (!IsValidClient(client, false)) return Plugin_Handled;
-
 	if (GetConVarBool(plugin_enable) && GetConVarBool(armor_from_spencer))
 	{
 		if (!GetConVarBool(cvBlu) && GetClientTeam(client) == 3) return Plugin_Handled;
@@ -677,7 +674,8 @@ public Action:DispenserCheck(Handle:timer, any:client)
 
 		if (g_bArmorEquipped[client] == false) return Plugin_Handled;
 
-		if (IsNearSpencer(client)) //IDK why, but this glitches.
+		new cond = GetEntProp(client, Prop_Send, "m_nPlayerCond");
+		if (IsNearSpencer(client) && !(cond & 21)) //IDK why, but this glitches by giving medics armor during quickfix ubers.
 		{
 			new lvl = GetDispenserLevel();
 			switch (lvl)
@@ -686,7 +684,7 @@ public Action:DispenserCheck(Handle:timer, any:client)
 				case 2: spencerrepair += RoundFloat(spencerrepair*GetConVarFloat(level2));
 				case 3: spencerrepair += RoundFloat(spencerrepair*GetConVarFloat(level3));
 			}
-			GetMaxArmor(client);
+			//GetMaxArmor(client);
 			if (MaxArmor[client] - armor[client] < spencerrepair)
 				spencerrepair = (MaxArmor[client] - armor[client]);
 
@@ -724,10 +722,7 @@ public MenuHandler_SetHud(Handle:menu, MenuAction:action, client, param2)
 	if (action == MenuAction_Select)
         {
                 param2++;
-		int = (param2 == 1) ? 1 : 
-			(param2 == 2) ? 2 : 
-			(param2 == 3) ? 3 : 
-			0;
+		int = (param2 == 1) ? 1 : (param2 == 2) ? 2 : (param2 == 3) ? 3 : 0;
 		SetHUDSetting(client, int);
 	}
 	else if (action == MenuAction_End)
@@ -818,7 +813,7 @@ public Action:Command_SetPlayerArmor(client, args)//THIS INTENTIONALLY OVERRIDES
 		{
 			if ((armorsize >= 0) && (armorsize <= GetConVarInt(setarmormax)) && IsPlayerAlive(target_list[i]))
 			{
-				GetMaxArmor(target_list[i]);
+				//GetMaxArmor(target_list[i]);
 				armor[target_list[i]] = armorsize;
 				ArmorOverheal[target_list[i]] = (armorsize > MaxArmor[target_list[i]]) ? true : false;
 				CPrintToChat(target_list[i], "{red}[Ad-Armor]{default} You've been given {green}%i{default} Armor", armorsize);
@@ -885,16 +880,16 @@ public Action:Command_SetHudColor(client, args)
 }
 public EntityOutput_OnPlayerTouch(const String:output[], caller, activator, Float:delay)
 {
-	if (GetConVarBool(plugin_enable) && GetConVarBool(armor_ammo_allow))
+	if (GetConVarBool(plugin_enable))
 	{
-		if (IsValidEntity(caller))
+		if (IsValidEdict(caller) && GetConVarBool(armor_ammo_allow))
 		{
 			new String:classname[128];
 			GetEdictClassname(caller, classname, sizeof(classname));
 
 			if (StrEqual(classname, "item_ammopack_full"))
 			{
-				if (IsValidEntity(activator))
+				if (IsValidEdict(activator))
 				{
 					if (!GetConVarBool(cvBlu) && GetClientTeam(activator) == 3) return;
 					if (!GetConVarBool(cvRed) && GetClientTeam(activator) == 2) return;
@@ -902,7 +897,7 @@ public EntityOutput_OnPlayerTouch(const String:output[], caller, activator, Floa
 						 return;
 					if (g_bArmorEquipped[activator] == false) return;
 
-					GetMaxArmor(activator);
+					//GetMaxArmor(activator);
 					new fullpack = RoundFloat(MaxArmor[activator]*GetConVarFloat(armor_from_fullammo));
 
 					fullpack = (MaxArmor[activator] - armor[activator] < fullpack) ? MaxArmor[activator] - armor[activator] : fullpack;
@@ -920,7 +915,7 @@ public EntityOutput_OnPlayerTouch(const String:output[], caller, activator, Floa
 			}
 			else if (StrEqual(classname, "item_ammopack_medium"))
 			{
-				if (IsValidEntity(activator))
+				if (IsValidEdict(activator))
 				{
 					if (!GetConVarBool(cvBlu) && GetClientTeam(activator) == 3) return;
 					if (!GetConVarBool(cvRed) && GetClientTeam(activator) == 2) return;
@@ -928,7 +923,7 @@ public EntityOutput_OnPlayerTouch(const String:output[], caller, activator, Floa
 						 return;
 					if (g_bArmorEquipped[activator] == false) return;
 
-					GetMaxArmor(activator);
+					//GetMaxArmor(activator);
 					new mediumpack = RoundFloat(MaxArmor[activator]*GetConVarFloat(armor_from_medammo));
 
 					mediumpack = (MaxArmor[activator] - armor[activator] < mediumpack) ? MaxArmor[activator] - armor[activator] : mediumpack;
@@ -946,7 +941,7 @@ public EntityOutput_OnPlayerTouch(const String:output[], caller, activator, Floa
 			}
 			else if (StrEqual(classname, "item_ammopack_small"))
 			{
-				if (IsValidEntity(activator))
+				if (IsValidEdict(activator))
 				{
 					if (!GetConVarBool(cvBlu) && GetClientTeam(activator) == 3) return;
 					if (!GetConVarBool(cvRed) && GetClientTeam(activator) == 2) return;
@@ -954,7 +949,7 @@ public EntityOutput_OnPlayerTouch(const String:output[], caller, activator, Floa
 						 return;
 					if (g_bArmorEquipped[activator] == false) return;
 
-					GetMaxArmor(activator);
+					//GetMaxArmor(activator);
 					new smallpack = RoundFloat(MaxArmor[activator]*GetConVarFloat(armor_from_smallammo));
 
 					smallpack = (MaxArmor[activator] - armor[activator] < smallpack) ? MaxArmor[activator] - armor[activator] : smallpack;
@@ -974,6 +969,22 @@ public EntityOutput_OnPlayerTouch(const String:output[], caller, activator, Floa
 	}
 	return;
 }
+public Action:Event_Resupply(Handle:hEvent, const String:name[], bool:dontBroadcast)
+{
+	if (GetConVarBool(plugin_enable)) return Plugin_Continue;
+	new client = GetClientOfUserId(GetEventInt(hEvent, "userid"));
+	if (IsValidClient(client) && IsClientInGame(client) && IsPlayerAlive(client))
+	{
+		if (!GetConVarBool(cvBlu) && GetClientTeam(client) == 3) return Plugin_Continue;
+		if (!GetConVarBool(cvRed) && GetClientTeam(client) == 2) return Plugin_Continue;
+		if (!GetConVarBool(armor_bots_allow) && IsFakeClient(client) && IsClientInGame(client))
+			 return Plugin_Continue;
+		if (g_bArmorEquipped[client] == false) return Plugin_Continue;
+		//GetMaxArmor(activator);
+		armor[client] = MaxArmor[client];
+	}
+	return Plugin_Continue;
+}
 public Action:TraceAttack(victim, &attacker, &inflictor, &Float:damage, &damagetype, &ammotype, hitbox, hitgroup)
 {
 	if (GetConVarBool(plugin_enable) && IsValidClient(attacker) && IsClientInGame(attacker) && IsPlayerAlive(attacker) && IsValidClient(victim) && IsClientInGame(victim) && IsPlayerAlive(victim))
@@ -987,13 +998,13 @@ public Action:TraceAttack(victim, &attacker, &inflictor, &Float:damage, &damaget
 				if (!GetConVarBool(armor_bots_allow) && IsFakeClient(victim) && IsClientInGame(victim)) return Plugin_Handled;
 				if (g_bArmorEquipped[victim] == false) return Plugin_Handled;
 
-				GetMaxArmor(victim);
+				//GetMaxArmor(victim);
 				new iCurrentMetal = GetEntProp(attacker, Prop_Data, "m_iAmmo", 4, 3);
 				new repairamount = GetConVarInt(armor_from_metal); //default 10
 				new mult = GetConVarInt(armor_from_metal_mult); //default 5
 
 				new hClientWeapon = GetEntPropEnt(attacker, Prop_Send, "m_hActiveWeapon");
-				//new wepindex = (IsValidEntity(hClientWeapon) && GetEntProp(hClientWeapon, Prop_Send, "m_iItemDefinitionIndex"));
+				//new wepindex = (IsValidEdict(hClientWeapon) && GetEntProp(hClientWeapon, Prop_Send, "m_iItemDefinitionIndex"));
 				new String:classname[64];
 				if (IsValidEdict(hClientWeapon)) GetEdictClassname(hClientWeapon, classname, sizeof(classname));
 				
@@ -1116,6 +1127,7 @@ public GetDamageResistanceArmor(client)
 			//default 0.25
 		}
 		case Armor_Chance: DamageResistance[client] = 1.0;
+		default: DamageResistance[client] = DamageResistance[client];
 	}
 }
 public GetArmorType(client)
@@ -1180,7 +1192,7 @@ public Action:ArmorHelp(client, args)
  
 		SetMenuTitle(armorhalp, "Armor Help - Main Menu:");
 		AddMenuItem(armorhalp, "armrtype", "What's my Armor type?");
-		AddMenuItem(armorhalp, "cmds", "What are the available Commands?");
+		AddMenuItem(armorhalp, "cmds", "What are the Available Commands?");
 		//AddMenuItem(armorhalp, "non", "None");
 		SetMenuExitBackButton(armorhalp, true);
 		DisplayMenu(armorhalp, client, MENU_TIME_FOREVER);
@@ -1291,7 +1303,7 @@ public Updater_OnPluginUpdated()
 public UpdateHUD(client)
 {
 	new setting = GetHUDSetting(client);
-	if (IsValidClient(client) && IsClientInGame(client) && !IsFakeClient(client) && GetConVarBool(plugin_enable))
+	if (IsValidClient(client) && !IsFakeClient(client) && GetConVarBool(plugin_enable))
 	{
 		if (GetConVarBool(show_hud_armor))
 		{
@@ -1362,7 +1374,7 @@ stock ClearTimer(&Handle:Timer)
 stock FindEntityByClassname2(startEnt, const String:classname[])
 {
 	/* If startEnt isn't valid shifting it back to the nearest valid one */
-	while (startEnt > -1 && !IsValidEntity(startEnt)) startEnt--;
+	while (startEnt > -1 && !IsValidEdict(startEnt)) startEnt--;
 	return FindEntityByClassname(startEnt, classname);
 }
 stock bool:IsValidClient(iClient, bool:bReplay = true)
@@ -1392,7 +1404,7 @@ stock bool:IsNearSpencer(client)
 	new healers = GetEntProp(client, Prop_Send, "m_nNumHealers");
 	//new dispenser = -1;
 	//while ((dispenser = FindEntityByClassname2(dispenser, "obj_dispenser")) != -1)
-		//if (IsValidEntity(dispenser)) GetEdictClassname(dispenser, classname, sizeof(classname));
+		//if (IsValidEdict(dispenser)) GetEdictClassname(dispenser, classname, sizeof(classname));
 	if (healers > 0)
 	{
 		for (new i = 1; i <= MaxClients; i++)
@@ -1409,7 +1421,7 @@ stock GetDispenserLevel()
 	new level, spencer = -1;
 	while ((spencer = FindEntityByClassname2(spencer, "obj_dispenser")) != -1)
 	{
-		level = (IsValidEntity(spencer)) ? GetEntProp(spencer, Prop_Send, "m_iUpgradeLevel") : -1;
+		level = (IsValidEdict(spencer)) ? GetEntProp(spencer, Prop_Send, "m_iUpgradeLevel") : -1;
 	}
 	return level;
 }

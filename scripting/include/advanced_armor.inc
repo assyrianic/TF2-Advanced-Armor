@@ -76,19 +76,20 @@ native Float:GetArmorDamageResistance(client);
  * Sets the damage resistance of a clients (for use with armor).
  *
  * @param client	Client index.
- * @param Float:dmgfloat	number that will be multiplied with damage.
+ * @param Float:dmgfloat	number that will be multiplied with damage and subtracted to armor.
+ *
+ * Good example of usage would be SetArmorDamageResistance(client, 0.99);
+ * 99% would mean that only 1% of the damage will go to player's health while the 99% goes to armor.
  */
 native SetArmorDamageResistance(client, Float:dmgfloat);
 
 /**
- * Returns if a client is near a dispencer.
+ * Returns if a client is near a dispencer/being healed by dispenser.
  *
  * @param client	Client index.
  * @return	true if near a dispenser.
  */
 native bool:IsNearDispenser(client);
-
-native bool:AllowArmorOverheal();
 
 public SharedPlugin:__pl_advanced_armor = 
 {
