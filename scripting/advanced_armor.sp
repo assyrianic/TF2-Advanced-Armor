@@ -7,7 +7,7 @@
 #include <updater>
 #include <morecolors>
 
-#define PLUGIN_VERSION "1.9.2"
+#define PLUGIN_VERSION "1.9.3"
 #define UPDATE_URL "https://bitbucket.org/assyrian/tf2-advanced-armor-plugin/raw/default/updater.txt"
 
 #define SoundArmorAdd "weapons/quake_ammo_pickup_remastered.wav"
@@ -32,6 +32,8 @@ new ArmorRegenerate[MAXPLAYERS+1];
 new Float:DamageResistance[MAXPLAYERS+1];
 new bool:ArmorOverheal[MAXPLAYERS+1] = { false, ... };
 new bool:g_bArmorEquipped[MAXPLAYERS+1] = { true, ... };
+new bool:ArmorVoice[MAXPLAYERS+1] = { false, ... };
+new bool:ArmorVoiceAuto[MAXPLAYERS+1];
 
 new Handle:hHudText;
 
@@ -48,6 +50,7 @@ new Handle:armor_snd_allow = INVALID_HANDLE;
 new Handle:allow_damage_overwhelm = INVALID_HANDLE;
 
 new Handle:HUD_PreThink = INVALID_HANDLE;
+new Handle:ArmorVoiceCvar = INVALID_HANDLE;
 
 new Handle:life_armor_chance = INVALID_HANDLE;
 new Handle:luck_armor_chance = INVALID_HANDLE;
@@ -112,6 +115,7 @@ new Handle:cvRed = INVALID_HANDLE;
 new Handle:HUDCookie;
 new Handle:HUDParamsCookieX;
 new Handle:HUDParamsCookieY;
+new Handle:VoiceCookie;
 
 new Handle:RedCookie;
 new Handle:GreenCookie;
@@ -158,16 +162,19 @@ public OnPluginStart()
 
 	RegAdminCmd("sm_setarmor", Command_SetPlayerArmor, ADMFLAG_KICK);
 	RegAdminCmd("sm_armortype", Command_SetPlayerArmorType, ADMFLAG_KICK);
+	RegAdminCmd("reloadarmor", CmdReloadCFG, ADMFLAG_GENERIC);
+
 	RegConsoleCmd("sm_armorhud", Command_SetPlayerHUD, "Let's a player set his/her Armor hud style");
 	RegConsoleCmd("sm_armorhudparams", Command_SetHudParams, "Let's a player set his/her Armor hud params");
 	RegConsoleCmd("sm_armorhelp", ArmorHelp, "help menu for players");
 	RegConsoleCmd("sm_armorhudcolor", Command_SetHudColor, "let's players change their armor hud color");
-
-	RegConsoleCmd("armoron", CmdEnable);
-	RegConsoleCmd("armoroff", CmdDisable);
-	RegAdminCmd("reloadarmor", CmdReloadCFG, ADMFLAG_GENERIC);
+	RegConsoleCmd("sm_armoron", CmdEnable);
+	RegConsoleCmd("sm_armoroff", CmdDisable);
+	RegConsoleCmd("sm_armorvoice", VoiceTogglePanelCmd);
+	AddCommandListener(Listener_Voice, "voicemenu");
 
 	HUDCookie = RegClientCookie("adarmor_hudstyle", "player's selected hud style", CookieAccess_Public);
+	VoiceCookie = RegClientCookie("adarmor_voice", "player's armor voice setting", CookieAccess_Public);
 	HUDParamsCookieX = RegClientCookie("adarmor_hudparamsx", "player's selected hud params x coordinate", CookieAccess_Public);
 	HUDParamsCookieY = RegClientCookie("adarmor_hudparamsy", "player's selected hud params y coordinate", CookieAccess_Public);
 	RedCookie = RegClientCookie("adarmor_hudred", "player's selected hud params red", CookieAccess_Public);
@@ -183,6 +190,8 @@ public OnPluginStart()
 	armor_bots_allow = CreateConVar("sm_adarmor_allow_bots", "1", "Enables bots to have armor", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 
 	armor_snd_allow = CreateConVar("sm_adarmor_allow_sound", "1", "Enables sounds when getting/losing armor", FCVAR_PLUGIN, true, 0.0, true, 1.0);
+
+	ArmorVoiceCvar = CreateConVar("sm_adarmor_allow_voice", "1", "Enable/Disable Armor Voice, also prevents download of voice files", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 
 	allow_damage_overwhelm = CreateConVar("sm_adarmor_allow_dmg_overwhelm", "1", "if damage depletes armor, transfer the rest of the damage to the player's health", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 	
@@ -321,6 +330,7 @@ public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
 	CreateNative("GetArmorDamageResistance", Native_GetArmorDamageResistance);
 	CreateNative("SetArmorDamageResistance", Native_SetArmorDamageResistance);
 	CreateNative("IsNearDispenser", Native_IsNearDispenser);
+	CreateNative("ReadClientArmor", Native_ReadClientArmor);
 	RegPluginLibrary("advanced_armor");
 	return APLRes_Success;
 }
@@ -364,11 +374,17 @@ public Native_IsNearDispenser(Handle:plugin, numParams)
 {
 	return IsNearSpencer(GetNativeCell(1));
 }
+public Native_ReadClientArmor(Handle:plugin, numParams)
+{
+	new client = GetNativeCell(1)
+	if (IsValidClient(client)) ReadArmor(client);
+}
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 public OnConfigsExecuted()
 {
 	CreateTimer(GetConVarFloat(timer_bitch_convar), Timer_Announce, _, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+	CreateTimer(GetRandomFloat(30.0, 60.0), Timer_DoBool, _, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
 }
 public OnClientDisconnect(client)
 {
@@ -381,8 +397,43 @@ public OnClientDisconnect(client)
 }
 public OnMapStart()
 {
+	decl String:s[PLATFORM_MAX_PATH];
 	PrecacheSound(SoundArmorAdd, true);
 	PrecacheSound(SoundArmorLose, true);
+	if (GetConVarBool(ArmorVoiceCvar))
+	{
+		for (new i = 1; i <= 20; i++)
+		{
+			Format(s, PLATFORM_MAX_PATH, "armorvoice/%i.wav", i);
+			PrecacheSound(s, true);
+			Format(s, PLATFORM_MAX_PATH, "sound/%s", s);
+			AddFileToDownloadsTable(s);
+		}
+		for (new f = 30; f <= 90; f++)
+		{
+			if (f == 30 || f == 40 || f == 50 || f == 60 || f == 70 || f == 80 || f == 90)
+			{
+				Format(s, PLATFORM_MAX_PATH, "armorvoice/%i.wav", f);
+				PrecacheSound(s, true);
+				Format(s, PLATFORM_MAX_PATH, "sound/%s", s);
+				AddFileToDownloadsTable(s);
+			}
+		}
+		Format(s, PLATFORM_MAX_PATH, "armorvoice/armor_gone.wav");
+		PrecacheSound(s, true);
+		Format(s, PLATFORM_MAX_PATH, "sound/%s", s);
+		AddFileToDownloadsTable(s);
+
+		Format(s, PLATFORM_MAX_PATH, "armorvoice/armor_level_is.wav");
+		PrecacheSound(s, true);
+		Format(s, PLATFORM_MAX_PATH, "sound/%s", s);
+		AddFileToDownloadsTable(s);
+
+		Format(s, PLATFORM_MAX_PATH, "armorvoice/hundred.wav");
+		PrecacheSound(s, true);
+		Format(s, PLATFORM_MAX_PATH, "sound/%s", s);
+		AddFileToDownloadsTable(s);
+	}
 }
 public OnClientPutInServer(client)
 {
@@ -411,6 +462,65 @@ public OnClientPutInServer(client)
 			ArmorType[client] = Armor_None;
 		}
 	}
+}
+public Action:VoiceTogglePanelCmd(client, args)
+{
+	if (!GetConVarBool(plugin_enable) || !IsValidClient(client) || !GetConVarBool(ArmorVoiceCvar)) return Plugin_Continue;
+	VoiceTogglePanel(client);
+	return Plugin_Handled;
+}
+public Action:VoiceTogglePanel(client)
+{
+	if (!IsValidClient(client)) return Plugin_Continue;
+	new Handle:panel = CreatePanel();
+	SetPanelTitle(panel, "Turn the Advanced Armor voice...");
+	DrawPanelItem(panel, "On");
+	DrawPanelItem(panel, "Off");
+	SendPanelToClient(panel, client, VoiceTogglePanelH, 9001);
+	CloseHandle(panel);
+	return Plugin_Continue;
+}
+public VoiceTogglePanelH(Handle:menu, MenuAction:action, client, param2)
+{
+	if (IsValidClient(client))
+	{
+		if (action == MenuAction_Select)
+		{
+			switch (param2)
+			{
+				case 1:
+				{
+					SetVoiceSetting(client, true);
+					CPrintToChat(client, "{red}[Ad-Armor]{default} You've turned the Armor Voice On");
+				}
+				case 2:
+				{
+					SetVoiceSetting(client, false);
+					CPrintToChat(client, "{red}[Ad-Armor]{default} You've turned the Armor Voice Off");
+				}
+			}
+		}
+	}
+}
+bool:GetVoiceSetting(client)
+{
+	if (!IsValidClient(client)) return false;
+	if (IsFakeClient(client)) return true;
+	if (!AreClientCookiesCached(client)) return true;
+	decl String:strCookie[32];
+	GetClientCookie(client, VoiceCookie, strCookie, sizeof(strCookie));
+	if (strCookie[0] == 0) return true;
+	else return bool:StringToInt(strCookie);
+}
+SetVoiceSetting(client, bool:on)
+{
+	if (!IsValidClient(client)) return;
+	if (IsFakeClient(client)) return;
+	if (!AreClientCookiesCached(client)) return;
+	new String:strCookie[32];
+	if (on) strCookie = "1";
+	else strCookie = "0";
+	SetClientCookie(client, VoiceCookie, strCookie);
 }
 GetHUDSetting(client)
 {
@@ -554,6 +664,7 @@ public Action:event_player_spawn(Handle:event, const String:name[], bool:dontBro
 			case 1: armor[client] = MaxArmor[client];
 			case 2: armor[client] = MaxArmor[client]/2;
 		}
+		if (GetConVarBool(ArmorVoiceCvar)) ArmorVoice[client] = GetVoiceSetting(client);
 	}
 	return Plugin_Continue;
 }
@@ -564,6 +675,7 @@ public Action:event_changeclass(Handle:event, const String:name[], bool:dontBroa
 	{
 		armor[client] = 0;
 		ArmorOverheal[client] = false;
+		if (GetConVarBool(ArmorVoiceCvar)) ArmorVoice[client] = GetVoiceSetting(client);
 	}
 	return Plugin_Continue;
 }
@@ -595,23 +707,41 @@ public Action:CmdReloadCFG(client, iAction)
 			GetArmorType(i);
 		}
 	}
-	ReplyToCommand(client, "Reloading Armor Config");
+	ReplyToCommand(client, "**** Reloading Armor Config ****");
 	return Plugin_Handled;
 }
 public Action:CmdEnable(client, iAction)
 {
 	if (IsClientInGame(client) && IsValidClient(client)) g_bArmorEquipped[client] = true;
-	ReplyToCommand(client, "Equipping Armor");
+	ReplyToCommand(client, "****Equipping Armor");
 	GetMaxArmor(client);
 	return Plugin_Handled;
 }
-
 public Action:CmdDisable(client, iAction)
 {
 	if (IsClientInGame(client) && IsValidClient(client)) g_bArmorEquipped[client] = false;
-	ReplyToCommand(client, "Unequipping Armor");
+	ReplyToCommand(client, "****Unequipping Armor");
 	return Plugin_Handled;
 }
+
+new bool:m_bMedicButtonBool[MAXPLAYERS+1] = false;
+public Action:Listener_Voice(client, const String:command[], argc)
+{
+	if (!IsClientInGame(client) || !IsValidClient(client) || !ArmorVoice[client] || !GetConVarBool(ArmorVoiceCvar)) return Plugin_Continue;
+
+	decl String:arguments[4];
+	GetCmdArgString(arguments, sizeof(arguments));
+
+	if (StrEqual(arguments, "0 0") && !m_bMedicButtonBool[client]) m_bMedicButtonBool[client] = true;
+
+	else if (StrEqual(arguments, "0 0") && m_bMedicButtonBool[client])
+	{
+		CreateTimer(0.0, Timer_ReadArmorVoice, client);
+		m_bMedicButtonBool[client] = false;
+	}
+	return Plugin_Continue;
+}
+
 public OnPreThink(client) //powers the HUD
 {
 	if (!GetConVarBool(HUD_PreThink)) return;
@@ -649,11 +779,7 @@ public Action:ArmorRegen(Handle:timer, any:client)
 		if (MaxArmor[client] - armor[client] < ArmorRegenerate[client])
 			ArmorRegenerate[client] = MaxArmor[client] - armor[client];
 
-		if (armor[client] < MaxArmor[client])
-		{
-			armor[client] += ArmorRegenerate[client];
-			if (GetConVarBool(armor_snd_allow)) EmitSoundToClient(client, SoundArmorAdd);
-		}
+		if (armor[client] < MaxArmor[client]) armor[client] += ArmorRegenerate[client];
 
 		if (armor[client] > MaxArmor[client] && ArmorOverheal[client] == false)
 			armor[client] = MaxArmor[client];
@@ -979,7 +1105,7 @@ public Action:Event_Resupply(Handle:hEvent, const String:name[], bool:dontBroadc
 		if (!GetConVarBool(cvRed) && GetClientTeam(client) == 2) return Plugin_Continue;
 		if (!GetConVarBool(armor_bots_allow) && IsFakeClient(client) && IsClientInGame(client))
 			 return Plugin_Continue;
-		if (g_bArmorEquipped[client] == false) return Plugin_Continue;
+		if (!g_bArmorEquipped[client]) return Plugin_Continue;
 		//GetMaxArmor(activator);
 		armor[client] = MaxArmor[client];
 	}
@@ -1029,6 +1155,11 @@ public Action:TraceAttack(victim, &attacker, &inflictor, &Float:damage, &damaget
 						{
 							EmitSoundToClient(victim, SoundArmorAdd);
 							EmitSoundToClient(attacker, SoundArmorAdd);
+						}
+						if (ArmorVoice[victim] && ArmorVoiceAuto[victim] && GetConVarBool(ArmorVoiceCvar))
+						{
+							CreateTimer(GetRandomFloat(3.0, 4.0), Timer_ReadArmorVoice, victim);
+							ArmorVoiceAuto[victim] = false;
 						}
 					}
 				}
@@ -1087,6 +1218,11 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 				armor[victim] = 0;
 			}
 			damage -= intdamage;
+			if (ArmorVoice[victim] && ArmorVoiceAuto[victim] && GetConVarBool(ArmorVoiceCvar))
+			{
+				CreateTimer(GetRandomFloat(3.0, 4.0), Timer_ReadArmorVoice, victim);
+				ArmorVoiceAuto[victim] = false;
+			}
 			//decl String:weapon[64];
 			//GetEdictClassname(inflictor, weapon, sizeof(weapon));
 			//PrintToConsole(attacker, "[Ad-Armor-Test] weapon = %s, damagetype = %d", weapon, damagetype);
@@ -1120,7 +1256,7 @@ public GetDamageResistanceArmor(client)
 		case Armor_Light: DamageResistance[client] = GetConVarFloat(damage_resistance_type1); //default 0.3
 		case Armor_Medium: DamageResistance[client] = GetConVarFloat(damage_resistance_type2); //default 0.6
 		case Armor_Heavy: DamageResistance[client] = GetConVarFloat(damage_resistance_type3); //default 0.8
-		case Armor_Luck: 
+		case Armor_Luck:
 		{
 			new chance = GetRandomInt(1, 10);
 			DamageResistance[client] = (chance > GetConVarInt(luck_armor_chance)) ? GetConVarFloat(damage_resistance_chance) : 0.0;
@@ -1173,12 +1309,201 @@ public GetClassHealth(client)
 		case TFClass_Pyro: g_bArmorEquipped[client] = (max > 175) ? false : true;
 		case TFClass_DemoMan: g_bArmorEquipped[client] = (max > 175) ? false : true;
 		case TFClass_Heavy: g_bArmorEquipped[client] = (max > 300) ? false : true;
-		case TFClass_Engineer: g_bArmorEquipped[client] = (max > 150) ? false : true;
+		case TFClass_Engineer: g_bArmorEquipped[client] = (max > 199) ? false : true;
 		case TFClass_Medic: g_bArmorEquipped[client] = (max > 150) ? false : true;
 		case TFClass_Sniper: g_bArmorEquipped[client] = (max > 150) ? false : true;
 		case TFClass_Spy: g_bArmorEquipped[client] = (max > 150) ? false : true;
 	}
 }
+public Action:Timer_DoBool(Handle:hTimer, any:client)
+{
+	for (new i = 0; i <= MaxClients; i++)
+	{
+		if (IsValidClient(i)) ArmorVoiceAuto[i] = true;
+	}
+	return Plugin_Continue;
+}
+public Action:Timer_ReadArmorVoice(Handle:hTimer, any:client)
+{
+	if (IsValidClient(client)) ReadArmor(client);
+	return Plugin_Continue;
+}
+
+new String:sentence[PLATFORM_MAX_PATH];
+new Handle:SoundTimer[MAXPLAYERS+1][6];
+new PlaySound = 0;
+
+public ReadArmor(client) //only "reads" up to 999. To make it read 1000+ You gotta do "10" "hundred" xD
+{
+	if (!IsValidClient(client) || !GetConVarBool(plugin_enable)) return;
+	new Float:convert, tenths, hundredth, units;
+	if (IsPlayerAlive(client))
+	{
+		new read = armor[client], Float:readout = float(armor[client])
+		if (read <= 0)
+		{
+			strcopy(sentence, PLATFORM_MAX_PATH, "armorvoice/armor_gone.wav");
+			PlayAudioSequence(client, sentence, 2.0);
+		}
+		if (read >= 100)
+		{
+			EmitSoundToClient(client, "armorvoice/armor_level_is.wav");
+			hundredth = RoundToFloor(readout/100);
+			//PrintToConsole(client, "[Ad-Armor-Test] read = %i, readout = %f, hundredth = %i", read, readout, hundredth);
+			Format(sentence, PLATFORM_MAX_PATH, "armorvoice/%i.wav", hundredth);
+			PlayAudioSequence(client, sentence, 2.0);
+			Format(sentence, PLATFORM_MAX_PATH, "armorvoice/hundred.wav");
+			PlayAudioSequence(client, sentence, 3.0);
+
+			tenths = RoundFloat(GetTensValue(readout));
+			if (tenths > 20)
+			{
+				convert = float(tenths);
+				//PrintToConsole(client, "[Ad-Armor-Test] tenths = %i, convert = %f", tenths, convert);
+				tenths = RoundFloat(RoundToDecimal(convert));
+				Format(sentence, PLATFORM_MAX_PATH, "armorvoice/%i.wav", tenths);
+				PlayAudioSequence(client, sentence, 4.0);
+				convert /= 10.0;
+
+				units = RoundFloat(FloatFraction(convert)*10);
+				PrintToConsole(client, "[Ad-Armor-Test] units = %i, convert = %f", units, convert);
+				Format(sentence, PLATFORM_MAX_PATH, "armorvoice/%i.wav", units);
+				PlayAudioSequence(client, sentence, 5.0);
+			}
+			else
+			{
+				Format(sentence, PLATFORM_MAX_PATH, "armorvoice/%i.wav", tenths);
+				PlayAudioSequence(client, sentence, 4.0);
+			}
+		}
+		else if (read < 100)
+		{
+			EmitSoundToClient(client, "armorvoice/armor_level_is.wav");
+			tenths = RoundToFloor(GetTensValue(readout));
+			if (tenths >= 21)
+			{
+				convert = float(tenths);
+				tenths = RoundFloat(RoundToDecimal(convert));
+				Format(sentence, PLATFORM_MAX_PATH, "armorvoice/%i.wav", tenths);
+				PlayAudioSequence(client, sentence, 2.0);
+				convert /= 10.0;
+
+				units = RoundFloat(FloatFraction(convert)*10);
+				Format(sentence, PLATFORM_MAX_PATH, "armorvoice/%i.wav", units);
+				PlayAudioSequence(client, sentence, 3.0);
+			}
+			else
+			{
+				Format(sentence, PLATFORM_MAX_PATH, "armorvoice/%i.wav", tenths);
+				PlayAudioSequence(client, sentence, 2.0);
+			}
+		}
+		else if (read <= 20)
+		{
+			EmitSoundToClient(client, "armorvoice/armor_level_is.wav");
+			Format(sentence, PLATFORM_MAX_PATH, "armorvoice/%i.wav", read);
+			PlayAudioSequence(client, sentence, 2.0);
+		}
+	}
+	if (IsClientObserver(client) || !IsPlayerAlive(client)) //read spec'd player's armor
+	{
+		new spec = GetEntPropEnt(client, Prop_Send, "m_hObserverTarget");
+		if (IsValidClient(spec) && IsPlayerAlive(spec) && spec != client)
+		{
+			new read = armor[spec], Float:readout = float(armor[spec])
+			if (read <= 0)
+			{
+				strcopy(sentence, PLATFORM_MAX_PATH, "armorvoice/armor_gone.wav");
+				PlayAudioSequence(client, sentence, 2.0);
+			}
+			if (read >= 100)
+			{
+				EmitSoundToClient(client, "armorvoice/armor_level_is.wav");
+				hundredth = RoundToFloor(readout/100);
+				PrintToConsole(client, "[Ad-Armor-Test] read = %i, readout = %f, hundredth = %i", read, readout, hundredth);
+				Format(sentence, PLATFORM_MAX_PATH, "armorvoice/%i.wav", hundredth);
+				PlayAudioSequence(client, sentence, 2.0);
+				Format(sentence, PLATFORM_MAX_PATH, "armorvoice/hundred.wav");
+				PlayAudioSequence(client, sentence, 3.0);
+
+				tenths = RoundFloat(GetTensValue(readout));
+				if (tenths > 20)
+				{
+					convert = float(tenths);
+					PrintToConsole(client, "[Ad-Armor-Test] tenths = %i, convert = %f", tenths, convert);
+					tenths = RoundFloat(RoundToDecimal(convert));
+					Format(sentence, PLATFORM_MAX_PATH, "armorvoice/%i.wav", tenths);
+					PlayAudioSequence(client, sentence, 4.0);
+					convert /= 10.0;
+
+					units = RoundFloat(FloatFraction(convert)*10);
+					PrintToConsole(client, "[Ad-Armor-Test] units = %i, convert = %f", units, convert);
+					Format(sentence, PLATFORM_MAX_PATH, "armorvoice/%i.wav", units);
+					PlayAudioSequence(client, sentence, 5.0);
+				}
+				else
+				{
+					Format(sentence, PLATFORM_MAX_PATH, "armorvoice/%i.wav", tenths);
+					PlayAudioSequence(client, sentence, 4.0);
+				}
+			}
+			else if (read < 100)
+			{
+				EmitSoundToClient(client, "armorvoice/armor_level_is.wav");
+				tenths = RoundToFloor(GetTensValue(readout));
+				if (tenths >= 21)
+				{
+					convert = float(tenths);
+					tenths = RoundFloat(RoundToDecimal(convert));
+					Format(sentence, PLATFORM_MAX_PATH, "armorvoice/%i.wav", tenths);
+					PlayAudioSequence(client, sentence, 2.0);
+					convert /= 10.0;
+
+					units = RoundFloat(FloatFraction(convert)*10);
+					Format(sentence, PLATFORM_MAX_PATH, "armorvoice/%i.wav", units);
+					PlayAudioSequence(client, sentence, 3.0);
+				}
+				else
+				{
+					Format(sentence, PLATFORM_MAX_PATH, "armorvoice/%i.wav", tenths);
+					PlayAudioSequence(client, sentence, 2.0);
+				}
+			}
+			else if (read <= 20)
+			{
+				EmitSoundToClient(client, "armorvoice/armor_level_is.wav");
+				Format(sentence, PLATFORM_MAX_PATH, "armorvoice/%i.wav", read);
+				PlayAudioSequence(client, sentence, 2.0);
+			}
+		}
+	}
+}
+public PlayAudioSequence(client, String:sound[], Float:delay)
+{
+	if (IsValidClient(client))
+	{
+		//strcopy(sentence, PLATFORM_MAX_PATH, sound);
+		new Handle:SoundDataPack;
+		if (PlaySound >= 6) PlaySound = 0;
+		SoundTimer[client][PlaySound] = CreateDataTimer(delay, Timer_PlaySound, SoundDataPack, TIMER_DATA_HNDL_CLOSE);
+		WritePackString(SoundDataPack, sound);
+		WritePackCell(SoundDataPack, client);
+		PlaySound++;
+	}
+}
+public Action:Timer_PlaySound(Handle:hTimer, Handle:pack)
+{
+	ResetPack(pack);
+	new String:PackSound[64];
+	ReadPackString(pack, PackSound, sizeof(PackSound));
+	new client = ReadPackCell(pack);
+	if (IsValidClient(client)) EmitSoundToClient(client, PackSound, _, _, SNDLEVEL_AIRCRAFT);
+	return Plugin_Continue;
+}
+
+//Format(s, PLATFORM_MAX_PATH, "%s%s", ModelPrefix, extension[i]);
+//strcopy(s, PLATFORM_MAX_PATH, GunShotBride);
+
 public Action:ArmorHelp(client, args)
 {
 	if (!GetConVarBool(plugin_enable))
@@ -1249,7 +1574,7 @@ public MenuHandler_armorhalp(Handle:menu, MenuAction:action, client, param2)
                 }
 		else if (param2 == 2)
                 {
-			CPrintToChat(client, "{red}[Ad-Armor]{default} The Available Commands are {green}'sm_armorhud'{default}, {green}'sm_armorhudparams'{default}, {green}'sm_setarmor' for admins{default}, and {green}'sm_armorhudcolor'");
+			CPrintToChat(client, "{red}[Ad-Armor]{default} The Available Commands are {green}'sm_armorhud'{default}, {green}'sm_armorhudparams'{default}, {green}'sm_setarmor' for admins{default}, {green}'sm_armorhudcolor'{default}, {green}armoroff{default} to remove armor, and {green}sm_armorvoice{default} for a voice that reads armor.");
                 }
 	}
 	else if (action == MenuAction_End)
@@ -1370,6 +1695,18 @@ stock ClearTimer(&Handle:Timer)
 		CloseHandle(Timer);
 		Timer = INVALID_HANDLE;
 	}
+}
+stock Float:GetTensValue(Float:value)
+{
+	new Float:calc = (value/100)-RoundToFloor((value/100));
+	calc *= 100.0;
+	return calc;
+}
+stock Float:RoundToDecimal(Float:value)
+{
+	value /= 10.0;
+	value = RoundToFloor(value)*10.0;
+	return value;
 }
 stock FindEntityByClassname2(startEnt, const String:classname[])
 {

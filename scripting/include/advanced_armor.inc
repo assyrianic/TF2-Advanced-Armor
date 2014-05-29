@@ -91,6 +91,14 @@ native SetArmorDamageResistance(client, Float:dmgfloat);
  */
 native bool:IsNearDispenser(client);
 
+/**
+ * reads a player's armor and gives an auditory sound
+ *
+ * @param client	Client index.
+ * @return		audio of armor amount
+ */
+native ReadClientArmor(client);
+
 public SharedPlugin:__pl_advanced_armor = 
 {
 	name = "advanced_armor",

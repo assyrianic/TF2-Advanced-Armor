@@ -4,13 +4,14 @@
 	{
 		"Version"
 		{
-			"Latest"	"1.9.2"
+			"Latest"	"1.9.3"
 		}
 		
-		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.9.2:"
-		"Notes"	"FINALLY made it so Resupply Lockers sets armor to max"
-		"Notes"	"fixed small bug with HUD and clients"
-		"Notes"	"fixed some INVALID_HANDLE errors"
+		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.9.3:"
+		"Notes"	"Added the HEV Suit voice to read a player's armor."
+		"Notes"	"Put HEV Voice option to cookies, set to false by default."
+		"Notes"	"Added natives that will read/play the armor with HEV suit"
+		"Notes"	"KHAYA ZOWAA"
 	}
 	
 	"Files"
