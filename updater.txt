@@ -4,14 +4,12 @@
 	{
 		"Version"
 		{
-			"Latest"	"1.9.3"
+			"Latest"	"1.9.4"
 		}
 		
-		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.9.3:"
-		"Notes"	"Added the HEV Suit voice to read a player's armor."
-		"Notes"	"Put HEV Voice option to cookies, set to false by default."
-		"Notes"	"Added natives that will read/play the armor with HEV suit"
-		"Notes"	"KHAYA ZOWAA"
+		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.9.4:"
+		"Notes"	"small improvements to code"
+		"Notes"	"removed SetArmorType for admins (unnecessary)"
 	}
 	
 	"Files"
