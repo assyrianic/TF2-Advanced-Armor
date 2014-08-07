@@ -4,12 +4,11 @@
 	{
 		"Version"
 		{
-			"Latest"	"1.9.4"
+			"Latest"	"1.9.41"
 		}
 		
-		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.9.4:"
-		"Notes"	"small improvements to code"
-		"Notes"	"removed SetArmorType for admins (unnecessary)"
+		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.9.41:"
+		"Notes"	"small patch for ReadArmor(client);"
 	}
 	
 	"Files"

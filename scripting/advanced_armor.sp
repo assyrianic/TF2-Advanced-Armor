@@ -7,7 +7,7 @@
 #include <updater>
 #include <morecolors>
 
-#define PLUGIN_VERSION "1.9.4"
+#define PLUGIN_VERSION "1.9.41"
 #define UPDATE_URL "https://bitbucket.org/assyrian/tf2-advanced-armor-plugin/raw/default/updater.txt"
 
 #define SoundArmorAdd "weapons/quake_ammo_pickup_remastered.wav"
@@ -375,7 +375,7 @@ public Native_IsNearDispenser(Handle:plugin, numParams)
 public Native_ReadClientArmor(Handle:plugin, numParams)
 {
 	new client = GetNativeCell(1)
-	if (IsValidClient(client)) ReadArmor(client);
+	if (IsValidClient(client)) ReadArmor(GetClientUserId(client));
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
