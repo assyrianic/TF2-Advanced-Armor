@@ -4,11 +4,12 @@
 	{
 		"Version"
 		{
-			"Latest"	"1.9.41"
+			"Latest"	"1.9.7"
 		}
 		
-		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.9.41:"
-		"Notes"	"small patch for ReadArmor(client);"
+		"Notes"	"More info @ http://forums.alliedmods.net/showthread.php?t=231447. Changes in 1.9.7:"
+		"Notes"	"converted old syntax to the new transitional syntax :)"
+		"Notes"	"using new methodmaps as provided by SourceMod 1.7+"
 	}
 	
 	"Files"

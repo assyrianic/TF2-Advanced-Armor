@@ -17,7 +17,7 @@
  *
  * @return	armortype.
  */
-native GetArmorType(client);
+native int GetArmorType(int client);
 
 /**
  * Sets the Armor Type of a client.
@@ -26,7 +26,7 @@ native GetArmorType(client);
  *
  * @param type		armor type.
  */
-native SetArmorType(client, type);
+native void SetArmorType(int client, int type);
 
 /**
  * Returns the Maximum armor a client can hold.
@@ -35,7 +35,7 @@ native SetArmorType(client, type);
  *
  * @return	Max Armor.
  */
-native GetMaxArmor(client);
+native int GetMaxArmor(int client);
 
 /**
  * Sets the Maximum armor a client can hold.
@@ -44,7 +44,7 @@ native GetMaxArmor(client);
  * 
  * @param maxarmor	Max Armor Amount.
  */
-native SetMaxArmor(client, maxarmor);
+native void SetMaxArmor(int client, int maxarmor);
 
 /**
  * Returns the current armor of a client.
@@ -53,7 +53,7 @@ native SetMaxArmor(client, maxarmor);
  *
  * @return	Current Armor.
  */
-native GetCurrentArmor(client);
+native int GetCurrentArmor(int client);
 
 /**
  * Set the current armor of a client.
@@ -61,7 +61,7 @@ native GetCurrentArmor(client);
  * @param client	Client index.
  * @param armount	Armor Amount
  */
-native SetCurrentArmor(client, armount);
+native void SetCurrentArmor(int client, int armount);
 
 /**
  * Returns the damage resistance of a clients armor.
@@ -70,7 +70,7 @@ native SetCurrentArmor(client, armount);
  *
  * @return	damage resistance float.
  */
-native Float:GetArmorDamageResistance(client);
+native float GetArmorDamageResistance(int client);
 
 /**
  * Sets the damage resistance of a clients (for use with armor).
@@ -81,7 +81,7 @@ native Float:GetArmorDamageResistance(client);
  * Good example of usage would be SetArmorDamageResistance(client, 0.99);
  * 99% would mean that only 1% of the damage will go to player's health while the 99% goes to armor.
  */
-native SetArmorDamageResistance(client, Float:dmgfloat);
+native void SetArmorDamageResistance(int client, float dmgfloat);
 
 /**
  * Returns if a client is near a dispencer/being healed by dispenser.
@@ -89,7 +89,7 @@ native SetArmorDamageResistance(client, Float:dmgfloat);
  * @param client	Client index.
  * @return	true if near a dispenser.
  */
-native bool:IsNearDispenser(client);
+native bool IsNearDispenser(int client);
 
 /**
  * reads a player's armor and gives an auditory sound
@@ -97,15 +97,4 @@ native bool:IsNearDispenser(client);
  * @param client	Client index.
  * @return		audio of armor amount
  */
-native ReadClientArmor(client);
-
-public SharedPlugin:__pl_advanced_armor = 
-{
-	name = "advanced_armor",
-	file = "advanced_armor.smx",
-#if defined REQUIRE_PLUGIN
-	required = 1,
-#else
-	required = 0,
-#endif
-};
+native void ReadClientArmor(int client);
